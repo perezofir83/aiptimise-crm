@@ -77,7 +77,22 @@ function setOverlay(o){localStorage.setItem(OV_KEY,JSON.stringify(o))}
 function applyOverlay(){
   const o=overlay();
   for(const p of DATA.people){ if(o[p.id]){ Object.assign(p.outreach,o[p.id].outreach||{}); p.custom=o[p.id].custom||p.custom; p.user_notes=o[p.id].user_notes??p.user_notes; } }
+  for(const c of DATA.companies){ if(o["c:"+c.id]){ c.triage=o["c:"+c.id].triage; } }
 }
+function setTriage(id,v){
+  const c=DATA.companies.find(x=>x.id===id); c.triage=v||undefined;
+  const o=overlay(); o["c:"+id]={triage:c.triage,ts:Date.now()}; setOverlay(o);
+  flash("Saved locally — use Sync to publish"); route();
+}
+const TRIAGE={relevant:["Relevant","meet"],not_relevant:["Not relevant","custom"],tomorrow:["Save for tomorrow","resp"],send_today:["Send today","intro"]};
+function triageSelect(c){
+  return `<select onclick="event.stopPropagation()" onchange="setTriage('${c.id}',this.value)"
+    style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12px">
+    <option value="">— triage —</option>
+    ${Object.entries(TRIAGE).map(([k,[lbl]])=>`<option value="${k}" ${c.triage===k?"selected":""}>${lbl}</option>`).join("")}
+  </select>`;
+}
+const triageTag=c=>c.triage?`<span class="tag ${TRIAGE[c.triage][1]}">${TRIAGE[c.triage][0]}</span>`:"";
 function saveEdit(p){
   const o=overlay();
   o[p.id]={outreach:p.outreach,custom:p.custom||[],user_notes:p.user_notes||"",ts:Date.now()};
@@ -123,6 +138,8 @@ function dashboard(){
   const q=(window._q||"").toLowerCase();
   let rows=DATA.companies.filter(c=>!q||c.name.toLowerCase().includes(q)||c.domain.includes(q)||c.niche.toLowerCase().includes(q));
   if(!window._showAll) rows=rows.filter(c=>c.icp==="fit"||c.icp==="fit-unverified");
+  const counts={};for(const c of DATA.companies)if(c.triage)counts[c.triage]=(counts[c.triage]||0)+1;
+  if(window._triage) rows=rows.filter(c=>c.triage===window._triage);
   rows.sort((a,b)=>{let va=a[sortBy],vb=b[sortBy];
     if(sortBy==="ai"){va=a.ai_ready.score??999;vb=b.ai_ready.score??999}
     if(sortBy==="catalog"){va=a.catalog.variants||0;vb=b.catalog.variants||0}
@@ -134,13 +151,19 @@ function dashboard(){
     <input type="text" style="flex:1" placeholder="Search company / niche..." value="${window._q||""}" oninput="window._q=this.value;dashboard()">
     <label class="muted" style="white-space:nowrap"><input type="checkbox" ${window._showAll?"checked":""} onchange="window._showAll=this.checked;dashboard()"> Show non-ICP (above cap etc.)</label>
   </div>
+  <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+    <button class="${!window._triage?"primary":""}" onclick="window._triage=null;dashboard()">All</button>
+    ${Object.entries(TRIAGE).map(([k,[lbl]])=>`<button class="${window._triage===k?"primary":""}" onclick="window._triage='${k}';dashboard()">${lbl} (${counts[k]||0})</button>`).join("")}
+  </div>
   <table><thead><tr>
+    <th>Triage</th>
     <th onclick="setSort('name')">Company</th><th onclick="setSort('revenue')">Revenue (est)</th>
     <th onclick="setSort('catalog')">Catalog</th><th onclick="setSort('ai')">AI-Ready</th>
     <th>US</th>
     <th onclick="setSort('crm_score')">Score</th></tr></thead><tbody>
   ${rows.map(c=>`<tr class="row" onclick="location.hash='#/company/${c.id}'">
-    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${icpHtml(c)}<div class="muted">${c.domain} · ${c.niche}</div></td>
+    <td>${triageSelect(c)}</td>
+    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${triageTag(c)}${icpHtml(c)}<div class="muted">${c.domain} · ${c.niche}</div></td>
     <td>${c.revenue||"—"}</td>
     <td>${c.catalog.label}</td>
     <td>${c.ai_ready.label}${c.ai_ready.llms_txt?"":" · no llms.txt"}</td>
@@ -154,8 +177,8 @@ function companyPage(id){
   const c=DATA.companies.find(x=>x.id===id); if(!c)return dashboard();
   const ppl=c.people.map(pid=>DATA.people.find(p=>p.id===pid)).filter(Boolean);
   shell(`<a class="crumb" href="#/">&larr; Dashboard</a>
-  <h2 class="page">${c.name}${tagHtml(companyStage(c))}</h2>
-  <div class="sub">${c.niche} · ${c.hq||""} · Shopify</div>
+  <h2 class="page">${c.name}${tagHtml(companyStage(c))}${triageTag(c)}</h2>
+  <div class="sub" style="display:flex;gap:12px;align-items:center">${c.niche} · ${c.hq||""} · Shopify &nbsp; ${triageSelect(c)}</div>
   <div class="card"><div class="grid">
     <div class="kv">Revenue (est)<b>${c.revenue||"—"}</b></div>
     <div class="kv">Catalog<b>${c.catalog.label}</b></div>
