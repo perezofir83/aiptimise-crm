@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>Aiptimise CRM</title>
+<style>
+  :root{--bg:#0f1115;--panel:#181b22;--line:#2a2f3a;--txt:#e8eaf0;--dim:#9aa3b2;--blue:#4f8cff;--green:#3ecf8e;--yellow:#ffd166;--red:#ff6b6b;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
+  a{color:var(--blue);text-decoration:none}
+  .wrap{max-width:1100px;margin:0 auto;padding:24px 20px}
+  header.top{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+  header.top h1{font-size:16px;letter-spacing:.5px}
+  header.top h1 span{color:var(--blue)}
+  .hbtns{display:flex;gap:8px}
+  button{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px 14px;cursor:pointer;font-size:13px}
+  button.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+  button.green{background:var(--green);border-color:var(--green);color:#08281a}
+  table{width:100%;border-collapse:collapse;margin-top:14px}
+  th{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.6px;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+  td{padding:10px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle}
+  tr.row:hover{background:var(--panel);cursor:pointer}
+  .tag{display:inline-block;font-size:10px;font-weight:700;border-radius:20px;padding:2px 9px;margin-left:8px;vertical-align:middle}
+  .tag.intro{background:#2b3f66;color:#9cc0ff}.tag.resp{background:#5a4a15;color:var(--yellow)}.tag.meet{background:#14452e;color:var(--green)}.tag.custom{background:#3a2f4f;color:#cbb3ff}
+  .score{font-weight:800}
+  .pill{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;background:var(--panel);border:1px solid var(--line);margin:0 6px 6px 0}
+  input[type=text],input[type=email],input[type=password]{background:var(--panel);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px 12px;font-size:14px;width:100%}
+  .login{max-width:360px;margin:14vh auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px}
+  .login h2{margin-bottom:4px}.login p{color:var(--dim);font-size:13px;margin-bottom:18px}
+  .login .f{margin-bottom:12px}
+  .err{color:var(--red);font-size:13px;margin-top:10px;min-height:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:16px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px}
+  .kv{font-size:13px;color:var(--dim)}.kv b{display:block;color:var(--txt);font-size:14px;margin-top:2px}
+  .crumb{color:var(--dim);font-size:13px;margin-bottom:6px;display:block}
+  h2.page{font-size:22px}
+  .sub{color:var(--dim);font-size:13px;margin-top:2px}
+  .search{margin-top:16px}
+  .otable td{font-size:13px}
+  .otable input[type=text]{padding:6px 8px;font-size:13px}
+  .muted{color:var(--dim);font-size:12px}
+  .addrow{margin-top:10px}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:20}
+  .modal .card{max-width:420px;width:92%}
+  textarea{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px;font-size:13px;min-height:70px}
+  .flash{position:fixed;bottom:20px;right:20px;background:var(--green);color:#08281a;font-weight:700;padding:10px 18px;border-radius:10px;display:none;z-index:30}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="flash" id="flash"></div>
+<script>
+/* ---------- state ---------- */
+let DATA=null, KEY=null, CREDS=null;
+const OV_KEY="aiptimise-crm-overlay", TOK_KEY="aiptimise-crm-token";
+const $=s=>document.querySelector(s);
+const app=$("#app");
+const enc=new TextEncoder(), dec=new TextDecoder();
+const b64d=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const b64e=b=>btoa(String.fromCharCode(...new Uint8Array(b)));
+
+async function deriveKey(email,pass,salt){
+  const km=await crypto.subtle.importKey("raw",enc.encode(email.trim().toLowerCase()+":"+pass),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:200000,hash:"SHA-256"},km,{name:"AES-GCM",length:256},true,["encrypt","decrypt"]);
+}
+async function loadData(email,pass){
+  const blob=await (await fetch("data.enc.json?t="+Date.now())).json();
+  const key=await deriveKey(email,pass,b64d(blob.salt));
+  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:b64d(blob.nonce)},key,b64d(blob.ct));
+  DATA=JSON.parse(dec.decode(pt)); KEY=key; CREDS={email,pass};
+  applyOverlay();
+}
+function overlay(){try{return JSON.parse(localStorage.getItem(OV_KEY)||"{}")}catch(e){return{}}}
+function setOverlay(o){localStorage.setItem(OV_KEY,JSON.stringify(o))}
+function applyOverlay(){
+  const o=overlay();
+  for(const p of DATA.people){ if(o[p.id]){ Object.assign(p.outreach,o[p.id].outreach||{}); p.custom=o[p.id].custom||p.custom; p.user_notes=o[p.id].user_notes??p.user_notes; } }
+}
+function saveEdit(p){
+  const o=overlay();
+  o[p.id]={outreach:p.outreach,custom:p.custom||[],user_notes:p.user_notes||"",ts:Date.now()};
+  setOverlay(o); flash("Saved locally — use Sync to publish");
+}
+function flash(msg){const f=$("#flash");f.textContent=msg;f.style.display="block";setTimeout(()=>f.style.display="none",2200)}
+
+/* ---------- tags ---------- */
+function personStage(p){
+  const o=p.outreach||{};
+  if(o.meeting_set)return{cls:"meet",label:"Meeting set"};
+  if(o.response_received)return{cls:"resp",label:"Response received"};
+  if(o.intro_sent)return{cls:"intro",label:"Intro sent"};
+  const c=(p.custom||[]).find(x=>x.checked);
+  if(c)return{cls:"custom",label:c.label};
+  return null;
+}
+function companyStage(c){
+  const order={"Meeting set":3,"Response received":2,"Intro sent":1};
+  let best=null;
+  for(const pid of c.people){const p=DATA.people.find(x=>x.id===pid);if(!p)continue;
+    const s=personStage(p); if(s&&(!best||((order[s.label]||0.5)>(order[best.label]||0.5))))best=s;}
+  return best;
+}
+const tagHtml=s=>s?`<span class="tag ${s.cls}">${s.label}</span>`:"";
+
+/* ---------- views ---------- */
+function shell(inner){
+  app.innerHTML=`<header class="top"><h1>AIPTIMISE <span>CRM</span></h1>
+   <div class="hbtns"><button onclick="location.hash='#/'">Dashboard</button>
+   <button onclick="syncToGitHub()" class="green">Sync to GitHub</button>
+   <button onclick="showSettings()">Settings</button></div></header>
+   <div class="wrap">${inner}</div>`;
+}
+let sortBy="crm_score", sortDir=-1;
+function dashboard(){
+  const q=(window._q||"").toLowerCase();
+  let rows=DATA.companies.filter(c=>!q||c.name.toLowerCase().includes(q)||c.domain.includes(q)||c.niche.toLowerCase().includes(q));
+  rows.sort((a,b)=>{let va=a[sortBy],vb=b[sortBy];
+    if(sortBy==="ai"){va=a.ai_ready.score??999;vb=b.ai_ready.score??999}
+    if(sortBy==="catalog"){va=a.catalog.variants||0;vb=b.catalog.variants||0}
+    if(typeof va==="string")return sortDir*va.localeCompare(vb||"");
+    return sortDir*((va??-1)-(vb??-1));});
+  shell(`<h2 class="page">Lead Dashboard</h2>
+  <div class="sub">${DATA.companies.length} Shopify companies · score = revenue + catalog size + AI-unreadiness · click a row</div>
+  <div class="search"><input type="text" placeholder="Search company / niche..." value="${window._q||""}" oninput="window._q=this.value;dashboard()"></div>
+  <table><thead><tr>
+    <th onclick="setSort('name')">Company</th><th onclick="setSort('revenue')">Revenue (est)</th>
+    <th onclick="setSort('catalog')">Catalog</th><th onclick="setSort('ai')">AI-Ready</th>
+    <th onclick="setSort('crm_score')">Score</th></tr></thead><tbody>
+  ${rows.map(c=>`<tr class="row" onclick="location.hash='#/company/${c.id}'">
+    <td><b>${c.name}</b>${tagHtml(companyStage(c))}<div class="muted">${c.domain} · ${c.niche}</div></td>
+    <td>${c.revenue||"—"}</td>
+    <td>${c.catalog.label}</td>
+    <td>${c.ai_ready.label}${c.ai_ready.llms_txt?"":" · no llms.txt"}</td>
+    <td class="score" style="color:${c.crm_score>=75?"var(--green)":c.crm_score>=55?"var(--yellow)":"var(--dim)"}">${c.crm_score}</td>
+  </tr>`).join("")}</tbody></table>`);
+}
+function setSort(k){if(sortBy===k)sortDir*=-1;else{sortBy=k;sortDir=-1}dashboard()}
+
+function companyPage(id){
+  const c=DATA.companies.find(x=>x.id===id); if(!c)return dashboard();
+  const ppl=c.people.map(pid=>DATA.people.find(p=>p.id===pid)).filter(Boolean);
+  shell(`<a class="crumb" href="#/">&larr; Dashboard</a>
+  <h2 class="page">${c.name}${tagHtml(companyStage(c))}</h2>
+  <div class="sub">${c.niche} · ${c.hq||""} · Shopify</div>
+  <div class="card"><div class="grid">
+    <div class="kv">Revenue (est)<b>${c.revenue||"—"}</b></div>
+    <div class="kv">Catalog<b>${c.catalog.label}</b></div>
+    <div class="kv">AI-Ready<b>${c.ai_ready.label} ${c.ai_ready.llms_txt?"(has llms.txt!)":"(no llms.txt)"}</b></div>
+    <div class="kv">CRM Score<b>${c.crm_score}</b></div>
+    <div class="kv">Founded<b>${c.founded||"—"}</b></div>
+    <div class="kv">Employees (est)<b>${c.employees||"—"}</b></div>
+    <div class="kv">Ownership<b>${c.ownership||"—"}</b></div>
+    <div class="kv">robots.txt vs AI<b>${c.ai_ready.robots||"—"}</b></div>
+  </div></div>
+  <div class="card"><h3>What they do</h3><p style="margin-top:8px;font-size:14px;line-height:1.6">${c.about||"—"}</p>
+  ${c.history?`<p class="muted" style="margin-top:6px">${c.history}</p>`:""}</div>
+  <div class="card"><h3>Links</h3><div style="margin-top:10px">
+    ${Object.entries(c.links).map(([k,v])=>`<a class="pill" href="${v}" target="_blank" rel="noopener">${k}</a>`).join("")}
+  </div></div>
+  <div class="card"><h3>People (${ppl.length})</h3>
+    ${ppl.length?`<table><tbody>${ppl.map(p=>`<tr class="row" onclick="location.hash='#/person/${p.id}'">
+      <td><b>${p.name}</b>${tagHtml(personStage(p))}<div class="muted">${p.title}</div></td>
+      <td class="muted">${p.role_bucket||""}</td></tr>`).join("")}</tbody></table>`
+    :`<p class="muted" style="margin-top:8px">No named contacts yet — LinkedIn verification pending.</p>`}</div>`);
+}
+
+function personPage(id){
+  const p=DATA.people.find(x=>x.id===id); if(!p)return dashboard();
+  p.custom=p.custom||[];
+  const o=p.outreach;
+  shell(`<a class="crumb" href="#/company/${p.company_id}">&larr; ${p.company}</a>
+  <h2 class="page">${p.name}${tagHtml(personStage(p))}</h2>
+  <div class="sub">${p.title}</div>
+  <div class="card"><h3>Profile</h3><div class="grid" style="margin-top:10px">
+    <div class="kv">Role bucket<b>${p.role_bucket||"—"}</b></div>
+    <div class="kv">LinkedIn<b>${p.linkedin?`<a href="${p.linkedin}" target="_blank" rel="noopener">Open profile</a>`:"—"}</b></div>
+    <div class="kv">Source<b>${p.source||"—"}</b></div></div>
+    ${p.notes?`<p class="muted" style="margin-top:10px">${p.notes}</p>`:""}
+    <div style="margin-top:8px">${(p.links||[]).map(l=>`<a class="pill" href="${l}" target="_blank" rel="noopener">${new URL(l).hostname}</a>`).join("")}</div>
+  </div>
+  <div class="card"><h3>Outreach</h3>
+  <table class="otable"><tbody>
+    <tr><td><label><input type="checkbox" ${o.intro_sent?"checked":""} onchange="tog('${p.id}','intro_sent',this.checked)"> Intro sent</label></td></tr>
+    <tr><td><label><input type="checkbox" ${o.response_received?"checked":""} onchange="tog('${p.id}','response_received',this.checked)"> Response received</label></td></tr>
+    <tr><td><label><input type="checkbox" ${o.meeting_set?"checked":""} onchange="tog('${p.id}','meeting_set',this.checked)"> Meeting set</label></td></tr>
+    ${p.custom.map((c,i)=>`<tr><td><label><input type="checkbox" ${c.checked?"checked":""} onchange="togCustom('${p.id}',${i},this.checked)"> ${c.label}</label></td></tr>`).join("")}
+    <tr><td>Status: <input type="text" style="width:70%" value="${o.status||""}" onchange="setStatus('${p.id}',this.value)" placeholder="free text..."></td></tr>
+  </tbody></table>
+  <div class="addrow"><button onclick="addCustom('${p.id}')">+ Add checkbox</button></div>
+  <div style="margin-top:14px"><div class="muted" style="margin-bottom:4px">Notes</div>
+  <textarea onchange="setNotes('${p.id}',this.value)">${p.user_notes||""}</textarea></div>
+  </div>`);
+}
+function findP(id){return DATA.people.find(x=>x.id===id)}
+function tog(id,f,v){const p=findP(id);p.outreach[f]=v;saveEdit(p);personPage(id)}
+function togCustom(id,i,v){const p=findP(id);p.custom[i].checked=v;saveEdit(p);personPage(id)}
+function addCustom(id){const l=prompt("Checkbox label:");if(!l)return;const p=findP(id);(p.custom=p.custom||[]).push({label:l,checked:false});saveEdit(p);personPage(id)}
+function setStatus(id,v){const p=findP(id);p.outreach.status=v;saveEdit(p)}
+function setNotes(id,v){const p=findP(id);p.user_notes=v;saveEdit(p)}
+
+/* ---------- settings & sync ---------- */
+function showSettings(){
+  const m=document.createElement("div");m.className="modal";
+  m.innerHTML=`<div class="card"><h3>Settings</h3>
+   <p class="muted" style="margin:8px 0">GitHub token (repo scope) — used only by "Sync to GitHub", stored in this browser only.</p>
+   <input type="password" id="tok" value="${localStorage.getItem(TOK_KEY)||""}" placeholder="ghp_...">
+   <div style="margin-top:12px;display:flex;gap:8px">
+    <button class="primary" onclick="localStorage.setItem('${TOK_KEY}',document.getElementById('tok').value);this.closest('.modal').remove();flash('Token saved')">Save</button>
+    <button onclick="this.closest('.modal').remove()">Close</button>
+    <button onclick="localStorage.removeItem('${OV_KEY}');location.reload()" style="margin-left:auto;color:var(--red)">Reset local edits</button>
+   </div></div>`;
+  document.body.appendChild(m);
+}
+async function syncToGitHub(){
+  const tok=localStorage.getItem(TOK_KEY);
+  if(!tok)return alert("Set a GitHub token in Settings first.");
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const key=await deriveKey(CREDS.email,CREDS.pass,salt);
+  const nonce=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv:nonce},key,enc.encode(JSON.stringify(DATA)));
+  const blob=JSON.stringify({v:1,kdf:"PBKDF2-SHA256-200000",salt:b64e(salt),nonce:b64e(nonce),ct:b64e(ct)});
+  const repo="perezofir83/aiptimise-crm", path="data.enc.json";
+  const meta=await (await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{headers:{Authorization:"Bearer "+tok}})).json();
+  const res=await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{method:"PUT",headers:{Authorization:"Bearer "+tok},
+    body:JSON.stringify({message:"crm: update data ("+new Date().toISOString()+")",content:btoa(unescape(encodeURIComponent(blob))),sha:meta.sha})});
+  if(res.ok){localStorage.removeItem(OV_KEY);flash("Synced to GitHub ✓")}else alert("Sync failed: "+res.status);
+}
+
+/* ---------- router & login ---------- */
+function route(){
+  if(!DATA)return login();
+  const h=location.hash;
+  if(h.startsWith("#/company/"))return companyPage(h.split("/")[2]);
+  if(h.startsWith("#/person/"))return personPage(h.split("/")[2]);
+  dashboard();
+}
+function login(){
+  app.innerHTML=`<div class="login"><h2>AIPTIMISE <span style="color:var(--blue)">CRM</span></h2>
+  <p>Sign in to decrypt the lead database.</p>
+  <div class="f"><input type="email" id="em" placeholder="Email" autocomplete="username"></div>
+  <div class="f"><input type="password" id="pw" placeholder="Password" autocomplete="current-password"></div>
+  <button class="primary" style="width:100%" onclick="doLogin()">Sign in</button>
+  <div class="err" id="lerr"></div></div>`;
+  $("#pw").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin()});
+}
+async function doLogin(){
+  try{await loadData($("#em").value,$("#pw").value);route()}
+  catch(e){$("#lerr").textContent="Wrong email or password."}
+}
+window.addEventListener("hashchange",route);
+route();
+</script>
+</body>
+</html>
