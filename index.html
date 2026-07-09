@@ -113,26 +113,38 @@ function shell(inner){
    <div class="wrap">${inner}</div>`;
 }
 let sortBy="crm_score", sortDir=-1;
+const ICP_BADGE={"above-cap":["Above $20M cap","resp"],"below-floor":["Below $500K","custom"],"thin-catalog":["Catalog <500","custom"],"fit-unverified":["Revenue unverified","intro"]};
+function icpHtml(c){const b=ICP_BADGE[c.icp];return b?`<span class="tag ${b[1]}" title="Yoni's ICP: catalog 500+, revenue $0.5M–$20M">${b[0]}</span>`:""}
+function usHtml(c){
+  const flag=c.us_based===true?"🇺🇸 Yes":c.us_based===false?"No":"?";
+  return c.us_note?`<span title="${c.us_note}">${flag} ⚠️</span>`:flag;
+}
 function dashboard(){
   const q=(window._q||"").toLowerCase();
   let rows=DATA.companies.filter(c=>!q||c.name.toLowerCase().includes(q)||c.domain.includes(q)||c.niche.toLowerCase().includes(q));
+  if(!window._showAll) rows=rows.filter(c=>c.icp==="fit"||c.icp==="fit-unverified");
   rows.sort((a,b)=>{let va=a[sortBy],vb=b[sortBy];
     if(sortBy==="ai"){va=a.ai_ready.score??999;vb=b.ai_ready.score??999}
     if(sortBy==="catalog"){va=a.catalog.variants||0;vb=b.catalog.variants||0}
     if(typeof va==="string")return sortDir*va.localeCompare(vb||"");
     return sortDir*((va??-1)-(vb??-1));});
   shell(`<h2 class="page">Lead Dashboard</h2>
-  <div class="sub">${DATA.companies.length} Shopify companies · score = revenue + catalog size + AI-unreadiness · click a row</div>
-  <div class="search"><input type="text" placeholder="Search company / niche..." value="${window._q||""}" oninput="window._q=this.value;dashboard()"></div>
+  <div class="sub">${rows.length} shown of ${DATA.companies.length} Shopify companies · ICP: catalog 500+, revenue $0.5M–$20M, US market · click a row</div>
+  <div class="search" style="display:flex;gap:12px;align-items:center">
+    <input type="text" style="flex:1" placeholder="Search company / niche..." value="${window._q||""}" oninput="window._q=this.value;dashboard()">
+    <label class="muted" style="white-space:nowrap"><input type="checkbox" ${window._showAll?"checked":""} onchange="window._showAll=this.checked;dashboard()"> Show non-ICP (above cap etc.)</label>
+  </div>
   <table><thead><tr>
     <th onclick="setSort('name')">Company</th><th onclick="setSort('revenue')">Revenue (est)</th>
     <th onclick="setSort('catalog')">Catalog</th><th onclick="setSort('ai')">AI-Ready</th>
+    <th>US</th>
     <th onclick="setSort('crm_score')">Score</th></tr></thead><tbody>
   ${rows.map(c=>`<tr class="row" onclick="location.hash='#/company/${c.id}'">
-    <td><b>${c.name}</b>${tagHtml(companyStage(c))}<div class="muted">${c.domain} · ${c.niche}</div></td>
+    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${icpHtml(c)}<div class="muted">${c.domain} · ${c.niche}</div></td>
     <td>${c.revenue||"—"}</td>
     <td>${c.catalog.label}</td>
     <td>${c.ai_ready.label}${c.ai_ready.llms_txt?"":" · no llms.txt"}</td>
+    <td>${usHtml(c)}</td>
     <td class="score" style="color:${c.crm_score>=75?"var(--green)":c.crm_score>=55?"var(--yellow)":"var(--dim)"}">${c.crm_score}</td>
   </tr>`).join("")}</tbody></table>`);
 }
@@ -153,6 +165,8 @@ function companyPage(id){
     <div class="kv">Employees (est)<b>${c.employees||"—"}</b></div>
     <div class="kv">Ownership<b>${c.ownership||"—"}</b></div>
     <div class="kv">robots.txt vs AI<b>${c.ai_ready.robots||"—"}</b></div>
+    <div class="kv">US-based<b>${usHtml(c)}${c.us_note?`<div class="muted" style="font-weight:400">${c.us_note}</div>`:""}</b></div>
+    <div class="kv">ICP fit<b>${c.icp==="fit"?"✓ In ICP":c.icp==="fit-unverified"?"Likely (revenue unverified)":ICP_BADGE[c.icp]?ICP_BADGE[c.icp][0]:c.icp}</b></div>
   </div></div>
   <div class="card"><h3>What they do</h3><p style="margin-top:8px;font-size:14px;line-height:1.6">${c.about||"—"}</p>
   ${c.history?`<p class="muted" style="margin-top:6px">${c.history}</p>`:""}</div>
