@@ -78,6 +78,21 @@ function applyOverlay(){
   const o=overlay();
   for(const p of DATA.people){ if(o[p.id]){ Object.assign(p.outreach,o[p.id].outreach||{}); p.custom=o[p.id].custom||p.custom; p.user_notes=o[p.id].user_notes??p.user_notes; } }
   for(const c of DATA.companies){ if(o["c:"+c.id]){ c.triage=o["c:"+c.id].triage; } }
+  for(const s of (DATA.signals||[])){ if(o["s:"+s.id]){ s.status=o["s:"+s.id].status; } }
+}
+/* ---------- signals (playbooks action queue) ---------- */
+const openSignals=()=> (DATA.signals||[]).filter(s=>s.status==="open"||!s.status);
+const HEAT={hot:["🔥","var(--red)"],warm:["●","var(--yellow)"],cool:["●","var(--dim)"]};
+function setSigStatus(id,v){
+  const s=(DATA.signals||[]).find(x=>x.id===id); if(!s)return;
+  s.status=v;
+  const o=overlay(); o["s:"+id]={status:v,ts:Date.now()}; setOverlay(o);
+  flash("Saved locally — use Sync to publish"); route();
+}
+function sigChips(c){
+  if(!c.signal_ids||!c.signal_ids.length)return "";
+  const sigs=openSignals().filter(s=>c.signal_ids.includes(s.id));
+  return sigs.map(s=>`<span class="tag" style="background:#4a1d1d;color:#ffb3b3" title="${s.label}: ${s.summary.replace(/"/g,'&quot;')}">${s.icon} ${s.label}</span>`).join("");
 }
 function setTriage(id,v){
   const c=DATA.companies.find(x=>x.id===id); c.triage=v||undefined;
@@ -121,8 +136,10 @@ const tagHtml=s=>s?`<span class="tag ${s.cls}">${s.label}</span>`:"";
 
 /* ---------- views ---------- */
 function shell(inner){
+  const nSig=DATA?openSignals().length:0;
   app.innerHTML=`<header class="top"><h1>AIPTIMISE <span>CRM</span></h1>
    <div class="hbtns"><button onclick="location.hash='#/'">Dashboard</button>
+   <button onclick="location.hash='#/actions'" style="${nSig?"border-color:var(--red);color:#ffb3b3;font-weight:700":""}">⚡ Actions${nSig?` (${nSig})`:""}</button>
    <button onclick="syncToGitHub()" class="green">Sync to GitHub</button>
    <button onclick="showSettings()">Settings</button></div></header>
    <div class="wrap">${inner}</div>`;
@@ -163,7 +180,7 @@ function dashboard(){
     <th onclick="setSort('crm_score')">Score</th></tr></thead><tbody>
   ${rows.map(c=>`<tr class="row" onclick="location.hash='#/company/${c.id}'">
     <td>${triageSelect(c)}</td>
-    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${triageTag(c)}${icpHtml(c)}<div class="muted">${c.domain} · ${c.niche}</div></td>
+    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${triageTag(c)}${icpHtml(c)}${sigChips(c)}<div class="muted">${c.domain} · ${c.niche}</div></td>
     <td>${c.revenue||"—"}</td>
     <td>${c.catalog.label}</td>
     <td>${c.ai_ready.label}${c.ai_ready.llms_txt?"":" · no llms.txt"}</td>
@@ -172,6 +189,45 @@ function dashboard(){
   </tr>`).join("")}</tbody></table>`);
 }
 function setSort(k){if(sortBy===k)sortDir*=-1;else{sortBy=k;sortDir=-1}dashboard()}
+
+const PB_NAMES={"app-review-harvest":"🧩 Weak tool","hiring-signal":"📣 Hiring","engagement":"💬 Engagement","fresh-migration":"🚚 Migration"};
+function actionsPage(){
+  const all=DATA.signals||[];
+  let rows=all.filter(s=>window._sigDone?(s.status!=="open"&&s.status):(s.status==="open"||!s.status));
+  if(window._sigPb) rows=rows.filter(s=>s.playbook===window._sigPb);
+  const counts={};for(const s of all)if(s.status==="open"||!s.status)counts[s.playbook]=(counts[s.playbook]||0)+1;
+  const heatRank={hot:0,warm:1,cool:2};
+  rows.sort((a,b)=>(heatRank[a.heat]??3)-(heatRank[b.heat]??3)||String(b.date||"").localeCompare(String(a.date||"")));
+  shell(`<h2 class="page">⚡ Action Queue</h2>
+  <div class="sub">Playbook signals — each row is a task: who, why now, and the angle. Mark Done when handled.</div>
+  <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <button class="${!window._sigPb?"primary":""}" onclick="window._sigPb=null;actionsPage()">All (${all.filter(s=>s.status==="open"||!s.status).length})</button>
+    ${Object.entries(PB_NAMES).map(([k,lbl])=>`<button class="${window._sigPb===k?"primary":""}" onclick="window._sigPb='${k}';actionsPage()">${lbl} (${counts[k]||0})</button>`).join("")}
+    <label class="muted" style="margin-left:auto;white-space:nowrap"><input type="checkbox" ${window._sigDone?"checked":""} onchange="window._sigDone=this.checked;actionsPage()"> Show handled</label>
+  </div>
+  ${rows.length?rows.map(s=>{
+    const h=HEAT[s.heat]||HEAT.cool;
+    const comp=s.company_id?`<a href="#/company/${s.company_id}"><b>${s.company||""}</b></a>`:`<b>${s.company||""}</b><span class="tag custom" title="Not in CRM yet — verify ICP then add">new</span>`;
+    const who=s.person?` · ${s.person_id?`<a href="#/person/${s.person_id}">${s.person}</a>`:s.person}`:"";
+    return `<div class="card" style="border-left:3px solid ${h[1]}">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+        <div>
+          <span style="color:${h[1]};font-weight:700">${s.heat==="hot"?"🔥 HOT":s.heat.toUpperCase()}</span>
+          <span class="tag intro">${s.icon} ${s.label}</span>
+          &nbsp;${comp}${who}
+          <div style="margin-top:8px;font-size:14px;line-height:1.5">${s.summary||""}</div>
+          <div style="margin-top:6px;font-size:13px;color:var(--green)">➜ ${s.action||""}</div>
+          <div class="muted" style="margin-top:6px">${s.date||""}${s.url?` · <a href="${s.url}" target="_blank" rel="noopener">source</a>`:""}${s.icp_guess?` · ICP: ${s.icp_guess}`:""}</div>
+        </div>
+        <select onchange="setSigStatus('${s.id}',this.value)"
+          style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:12px;flex-shrink:0">
+          <option value="open" ${(!s.status||s.status==="open")?"selected":""}>Open</option>
+          <option value="done" ${s.status==="done"?"selected":""}>✓ Done</option>
+          <option value="dismissed" ${s.status==="dismissed"?"selected":""}>✗ Dismiss</option>
+        </select>
+      </div></div>`;
+  }).join(""):`<div class="card muted">No open signals — playbook runs will fill this queue.</div>`}`);
+}
 
 function companyPage(id){
   const c=DATA.companies.find(x=>x.id===id); if(!c)return dashboard();
@@ -191,6 +247,12 @@ function companyPage(id){
     <div class="kv">US-based<b>${usHtml(c)}${c.us_note?`<div class="muted" style="font-weight:400">${c.us_note}</div>`:""}</b></div>
     <div class="kv">ICP fit<b>${c.icp==="fit"?"✓ In ICP":c.icp==="fit-unverified"?"Likely (revenue unverified)":ICP_BADGE[c.icp]?ICP_BADGE[c.icp][0]:c.icp}</b></div>
   </div></div>
+  ${(c.signal_ids||[]).length?`<div class="card" style="border-left:3px solid var(--red)"><h3>⚡ Signals</h3>
+    ${(DATA.signals||[]).filter(s=>c.signal_ids.includes(s.id)).map(s=>`
+      <div style="margin-top:10px;font-size:14px">${s.icon} <b>${s.label}</b> <span class="muted">(${s.heat} · ${s.date||""}${s.status&&s.status!=="open"?" · "+s.status:""})</span>
+      <div style="margin-top:3px">${s.summary||""}</div>
+      <div style="margin-top:3px;color:var(--green);font-size:13px">➜ ${s.action||""}</div></div>`).join("")}
+    <div style="margin-top:12px"><a href="#/actions">Open Action Queue →</a></div></div>`:""}
   <div class="card"><h3>What they do</h3><p style="margin-top:8px;font-size:14px;line-height:1.6">${c.about||"—"}</p>
   ${c.history?`<p class="muted" style="margin-top:6px">${c.history}</p>`:""}</div>
   <div class="card"><h3>Links</h3><div style="margin-top:10px">
@@ -271,6 +333,7 @@ function route(){
   const h=location.hash;
   if(h.startsWith("#/company/"))return companyPage(h.split("/")[2]);
   if(h.startsWith("#/person/"))return personPage(h.split("/")[2]);
+  if(h.startsWith("#/actions"))return actionsPage();
   dashboard();
 }
 function login(){
