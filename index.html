@@ -145,7 +145,7 @@ function shell(inner){
    <div class="wrap">${inner}</div>`;
 }
 let sortBy="crm_score", sortDir=-1;
-const ICP_BADGE={"above-cap":["Above $20M cap","resp"],"below-floor":["Below $500K","custom"],"thin-catalog":["Catalog <500","custom"],"fit-unverified":["Revenue unverified","intro"]};
+const ICP_BADGE={"above-cap":["Above $20M cap","resp"],"below-floor":["Below $500K","custom"],"thin-catalog":["Catalog <500","custom"],"fit-unverified":["Revenue unverified","intro"],"not-shopify":["Not Shopify","custom"]};
 function icpHtml(c){const b=ICP_BADGE[c.icp];return b?`<span class="tag ${b[1]}" title="Yoni's ICP: catalog 500+, revenue $0.5M–$20M">${b[0]}</span>`:""}
 function usHtml(c){
   const flag=c.us_based===true?"🇺🇸 Yes":c.us_based===false?"No":"?";
