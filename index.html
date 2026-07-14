@@ -89,16 +89,12 @@ function setSigStatus(id,v){
   const o=overlay(); o["s:"+id]={status:v,ts:Date.now()}; setOverlay(o);
   flash("Saved locally — use Sync to publish"); route();
 }
-const EMAIL_TAG={"found-public":["✉️ verified-public","meet"],"pattern-guess":["✉️ pattern (verify!)","resp"],"generic-only":["✉️ generic only","custom"]};
 function emailStatusTag(p){
-  const t=EMAIL_TAG[p.email_status];
-  return t?`<span class="tag ${t[1]}" title="${p.email||""}">${t[0]}</span>`:"";
+  return p.email_status==="found-public"?`<span class="tag meet" title="${p.email||""}">✉️ verified</span>`:"";
 }
 function companyEmailTag(c){
   const ppl=(c.people||[]).map(pid=>DATA.people.find(p=>p.id===pid)).filter(Boolean);
-  if(ppl.some(p=>p.email_status==="found-public"))return `<span class="tag meet">✉️</span>`;
-  if(ppl.some(p=>p.email_status==="pattern-guess")||(c.contact_emails||[]).length)return `<span class="tag resp">✉️?</span>`;
-  return "";
+  return ppl.some(p=>p.email_status==="found-public")?`<span class="tag meet">✉️</span>`:"";
 }
 function sigChips(c){
   if(!c.signal_ids||!c.signal_ids.length)return "";
@@ -267,12 +263,8 @@ function companyPage(id){
   <div class="card"><h3>What they do</h3><p style="margin-top:8px;font-size:14px;line-height:1.6">${c.about||"—"}</p>
   ${c.history?`<p class="muted" style="margin-top:6px">${c.history}</p>`:""}</div>
   <div class="card"><h3>Links</h3><div style="margin-top:10px">
-    ${Object.entries(c.links).map(([k,v])=>`<a class="pill" href="${v}" target="_blank" rel="noopener">${k}</a>`).join("")}
+    ${Object.entries(c.links).map(([k,v])=>`<a class="pill" href="${v}" target="_blank" rel="noopener">${k==="email"?"✉️ "+v.replace("mailto:",""):k}</a>`).join("")}
   </div></div>
-  ${(c.contact_emails||[]).length||c.email_pattern?`<div class="card"><h3>✉️ Emails</h3>
-    ${c.email_pattern?`<p class="muted" style="margin-top:8px">Domain pattern: <b style="color:var(--txt)">${c.email_pattern}</b></p>`:""}
-    <div style="margin-top:10px">${(c.contact_emails||[]).map(e=>`<a class="pill" href="mailto:${e.email}" title="${(e.context||"").replace(/"/g,'&quot;')}">${e.email}</a>`).join("")}</div>
-  </div>`:""}
   <div class="card"><h3>People (${ppl.length})</h3>
     ${ppl.length?`<table><tbody>${ppl.map(p=>`<tr class="row" onclick="location.hash='#/person/${p.id}'">
       <td><b>${p.name}</b>${tagHtml(personStage(p))}<div class="muted">${p.title}</div></td>
