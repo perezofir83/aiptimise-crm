@@ -96,6 +96,15 @@ function companyEmailTag(c){
   const ppl=(c.people||[]).map(pid=>DATA.people.find(p=>p.id===pid)).filter(Boolean);
   return ppl.some(p=>p.email_status==="found-public")?`<span class="tag meet">✉️</span>`:"";
 }
+function companyChannelTag(c){
+  const ppl=(c.people||[]).map(pid=>DATA.people.find(p=>p.id===pid)).filter(Boolean);
+  const withCh=ppl.filter(p=>p.channels&&Object.keys(p.channels).length);
+  if(!withCh.length)return "";
+  const kinds=new Set(); withCh.forEach(p=>Object.keys(p.channels).forEach(k=>kinds.add(k)));
+  const ICON={x_twitter:"𝕏",instagram:"📷",phone:"📞",personal_site:"🌐",github:"🐙",forum_handle:"💬"};
+  const icons=[...kinds].map(k=>ICON[k]||"").join("");
+  return `<span class="tag meet" title="${withCh.length} contact(s) reachable off-LinkedIn: ${[...kinds].join(', ')}">📡 ${icons}</span>`;
+}
 function sigChips(c){
   if(!c.signal_ids||!c.signal_ids.length)return "";
   const sigs=openSignals().filter(s=>c.signal_ids.includes(s.id));
@@ -187,7 +196,7 @@ function dashboard(){
     <th onclick="setSort('crm_score')">Score</th></tr></thead><tbody>
   ${rows.map(c=>`<tr class="row" onclick="location.hash='#/company/${c.id}'">
     <td>${triageSelect(c)}</td>
-    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${triageTag(c)}${icpHtml(c)}${sigChips(c)}${companyEmailTag(c)}<div class="muted">${c.domain} · ${c.niche}</div></td>
+    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${triageTag(c)}${icpHtml(c)}${sigChips(c)}${companyEmailTag(c)}${companyChannelTag(c)}<div class="muted">${c.domain} · ${c.niche}</div></td>
     <td>${c.revenue||"—"}</td>
     <td>${c.catalog.label}</td>
     <td>${c.ai_ready.label}${c.ai_ready.llms_txt?"":" · no llms.txt"}</td>
