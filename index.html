@@ -267,7 +267,7 @@ function companyPage(id){
   </div></div>
   <div class="card"><h3>People (${ppl.length})</h3>
     ${ppl.length?`<table><tbody>${ppl.map(p=>`<tr class="row" onclick="location.hash='#/person/${p.id}'">
-      <td><b>${p.name}</b>${tagHtml(personStage(p))}<div class="muted">${p.title}</div></td>
+      <td><b>${p.name}</b>${tagHtml(personStage(p))}${emailStatusTag(p)}${p.channels&&Object.keys(p.channels).length?`<span class="tag meet" title="${Object.keys(p.channels).join(', ')}">📡 ${Object.keys(p.channels).length}ch</span>`:""}<div class="muted">${p.title}</div></td>
       <td class="muted">${p.role_bucket||""}</td></tr>`).join("")}</tbody></table>`
     :`<p class="muted" style="margin-top:8px">No named contacts yet — LinkedIn verification pending.</p>`}</div>`);
 }
@@ -284,6 +284,9 @@ function personPage(id){
     <div class="kv">Role bucket<b>${p.role_bucket||"—"}</b></div>
     <div class="kv">LinkedIn<b>${p.linkedin?`<a href="${p.linkedin}" target="_blank" rel="noopener">Open profile</a>`:"—"}</b></div>
     <div class="kv">Source<b>${p.source||"—"}</b></div></div>
+    ${p.channels&&Object.keys(p.channels).length?`<div style="margin-top:12px"><div class="muted" style="margin-bottom:6px">📡 Other channels (not LinkedIn)</div>
+      ${Object.entries(p.channels).map(([k,v])=>{const CH={x_twitter:"𝕏",personal_site:"🌐 site",forum_handle:"💬 forum",github:"🐙 GitHub",phone:"📞",instagram:"📷 IG"};const lbl=CH[k]||k;const href=v.url||(k==="phone"?"tel:"+v.value:v.value.startsWith("http")?v.value:null);return href?`<a class="pill" href="${href}" target="_blank" rel="noopener" title="${(v.note||'').replace(/"/g,'&quot;')}">${lbl}: ${v.value}</a>`:`<span class="pill" title="${(v.note||'').replace(/"/g,'&quot;')}">${lbl}: ${v.value}</span>`;}).join("")}
+    </div>`:""}
     ${p.notes?`<p class="muted" style="margin-top:10px">${p.notes}</p>`:""}
     <div style="margin-top:8px">${(p.links||[]).map(l=>`<a class="pill" href="${l}" target="_blank" rel="noopener">${new URL(l).hostname}</a>`).join("")}</div>
   </div>
