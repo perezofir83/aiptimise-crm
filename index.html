@@ -282,6 +282,49 @@ function leadStage(o){
   }
   return null;
 }
+/* ---- Draft modal: review/edit, copy to clipboard, open LinkedIn ---- */
+function copyText(t,label){
+  const done=()=>flash((label||"Draft")+" copied — paste with ⌘V");
+  if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t).then(done,()=>fallbackCopy(t,done));}
+  else fallbackCopy(t,done);
+}
+function fallbackCopy(t,done){
+  const ta=document.createElement("textarea");ta.value=t;ta.style.position="fixed";ta.style.opacity="0";
+  document.body.appendChild(ta);ta.select();try{document.execCommand("copy");done();}catch(e){flash("Copy failed — select the text manually");}
+  ta.remove();
+}
+function showDraft(id){
+  const p=findP(id); if(!p||!p.draft){flash("No draft for this lead");return;}
+  const esc=s=>(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const m=document.createElement("div");m.className="modal";
+  m.innerHTML=`<div class="card" style="max-width:640px;max-height:88vh;overflow:auto">
+    <h3 style="margin:0 0 2px">${esc(p.name)}</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:14px">${esc(p.title||"")} · ${esc(p.company||"")}</div>
+
+    <div style="font-size:12px;font-weight:700;margin-bottom:4px">1 · Connection note <span class="muted" style="font-weight:400">(send with the invite)</span></div>
+    <textarea id="dnote" rows="4" style="width:100%;font:13px/1.5 inherit;padding:8px">${esc(p.draft.note)}</textarea>
+    <div class="muted" style="font-size:11px;margin:2px 0 6px"><span id="dcount"></span> / 300 chars</div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button class="primary" onclick="copyText(document.getElementById('dnote').value,'Note')">Copy note</button>
+      ${p.linkedin?`<button onclick="window.open('${p.linkedin}','_blank','noopener')">Open profile ↗</button>`:""}
+    </div>
+
+    <div style="font-size:12px;font-weight:700;margin-bottom:4px">2 · Full message <span class="muted" style="font-weight:400">(after they connect / reply)</span></div>
+    <textarea id="dmsg" rows="14" style="width:100%;font:13px/1.5 inherit;padding:8px">${esc(p.draft.msg)}</textarea>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="primary" onclick="copyText(document.getElementById('dmsg').value,'Message')">Copy message</button>
+      ${p.linkedin?`<button onclick="window.open('${p.linkedin}','_blank','noopener')">Open profile ↗</button>`:""}
+      <button style="margin-left:auto" onclick="this.closest('.modal').remove()">Close</button>
+    </div>
+    <div class="muted" style="font-size:11px;margin-top:10px">Edits here are for this copy only — they aren't saved.</div>
+  </div>`;
+  document.body.appendChild(m);
+  m.addEventListener("click",e=>{if(e.target===m)m.remove();});
+  const ta=m.querySelector("#dnote"),cnt=m.querySelector("#dcount");
+  const upd=()=>{cnt.textContent=ta.value.length;cnt.style.color=ta.value.length>300?"var(--red)":"";};
+  ta.addEventListener("input",upd);upd();
+}
+
 function setLead(id,field){
   const p=findP(id); const o=p.outreach=p.outreach||{};
   const now=new Date().toISOString();
@@ -311,11 +354,12 @@ function leadsPage(){
     ${[["all","All"],["todo","Not invited"],["due","Due for ad (3d+)"],["replied","Replied"]].map(([k,l])=>
       `<button class="${f===k?"primary":""}" onclick="window._leadFilter='${k}';leadsPage()">${l} (${counts[k]})</button>`).join("")}
   </div>
-  <table><thead><tr><th>Role — Company</th><th>Contact</th><th>Channels</th><th>Invite flow</th></tr></thead><tbody>
+  <table><thead><tr><th>Role — Company</th><th>Contact</th><th>Draft</th><th>Channels</th><th>Invite flow</th></tr></thead><tbody>
   ${leads.map(p=>{const o=p.outreach||{};const s=leadStage(o);
     return `<tr>
       <td><b>${p.title||p.role_bucket||"—"}</b><div class="muted">${cName(p.company_id)}</div></td>
       <td><a href="#/person/${p.id}">${p.name}</a>${liTag(p)}${s?` <span class="tag ${s.cls}">${s.lbl}</span>`:""}</td>
+      <td>${p.draft?`<a href="#" onclick="showDraft('${p.id}');return false" style="font-weight:600">📝 Draft</a>`:`<span class="muted" style="font-size:11px">—</span>`}</td>
       <td>${leadChannelPills(p)}</td>
       <td style="white-space:nowrap">
         <label style="font-size:12px;margin-right:8px"><input type="checkbox" ${o.invite_sent?"checked":""} onchange="setLead('${p.id}','invite')"> invited</label>
