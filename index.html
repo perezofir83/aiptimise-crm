@@ -156,6 +156,7 @@ function shell(inner){
   app.innerHTML=`<header class="top"><h1>AIPTIMISE <span>CRM</span></h1>
    <div class="hbtns"><button onclick="location.hash='#/'">Dashboard</button>
    <button onclick="location.hash='#/actions'" style="${nSig?"border-color:var(--red);color:#ffb3b3;font-weight:700":""}">⚡ Actions${nSig?` (${nSig})`:""}</button>
+   <button onclick="location.hash='#/leads'">🎯 Leads Invite</button>
    <button onclick="syncToGitHub()" class="green">Sync to GitHub</button>
    <button onclick="showSettings()">Settings</button></div></header>
    <div class="wrap">${inner}</div>`;
@@ -243,6 +244,77 @@ function actionsPage(){
         </select>
       </div></div>`;
   }).join(""):`<div class="card muted">No open signals — playbook runs will fill this queue.</div>`}`);
+}
+
+/* ---------- Leads Invite tab (Yoni outreach flow: invite -> 3d ad -> reply -> draft) ---------- */
+const LEAD_ROLE_KW=/(owner|founder|co-?founder|ceo|president|proprietor|principal|brand|e-?commerce|ecom|marketing|digital|growth|merchandis|web merchant|web project|web content)/i;
+function isLeadRole(p){ return LEAD_ROLE_KW.test(p.title||"")||LEAD_ROLE_KW.test(p.role_bucket||""); }
+function daysSince(iso){ if(!iso)return null; return Math.floor((Date.now()-new Date(iso).getTime())/86400000); }
+function leadChannelPills(p){
+  const out=[];
+  if(p.linkedin) out.push(`<a class="pill" href="${p.linkedin}" target="_blank" rel="noopener">in</a>`);
+  if(p.email&&p.email_status==="found-public") out.push(`<a class="pill" href="mailto:${p.email}" target="_blank">✉️</a>`);
+  const CH={x_twitter:"𝕏",instagram:"📷",personal_site:"🌐",github:"🐙",forum_handle:"💬",phone:"📞"};
+  for(const [k,v] of Object.entries(p.channels||{})){
+    const href=v.url||(k==="phone"?"tel:"+v.value:(v.value||"").startsWith("http")?v.value:null);
+    out.push(href?`<a class="pill" href="${href}" target="_blank" rel="noopener">${CH[k]||k}</a>`:`<span class="pill">${CH[k]||k}</span>`);
+  }
+  return out.join("")||`<span class="muted">no channel</span>`;
+}
+function leadStage(o){
+  o=o||{};
+  if(o.draft_sent)return{k:"draft",lbl:"Draft sent",cls:"meet"};
+  if(o.replied||o.response_received)return{k:"replied",lbl:"Replied ➜ send draft",cls:"resp"};
+  if(o.followup_sent)return{k:"followup",lbl:"Ad sent",cls:"intro"};
+  if(o.invite_sent){
+    const d=daysSince(o.invite_date);
+    if(d!==null&&d>=3)return{k:"due",lbl:`Invited ${d}d ago ➜ send ad`,cls:"custom"};
+    return{k:"invited",lbl:`Invited${d!==null?` ${d}d`:""}`,cls:"intro"};
+  }
+  return null;
+}
+function setLead(id,field){
+  const p=findP(id); const o=p.outreach=p.outreach||{};
+  const now=new Date().toISOString();
+  if(field==="invite"){ o.invite_sent=!o.invite_sent; o.invite_date=o.invite_sent?now:null; }
+  if(field==="followup"){ o.followup_sent=!o.followup_sent; o.followup_date=o.followup_sent?now:null; }
+  if(field==="replied"){ o.replied=!o.replied; o.response_received=o.replied; }
+  if(field==="draft"){ o.draft_sent=!o.draft_sent; }
+  saveEdit(p); leadsPage();
+}
+function leadsPage(){
+  const order={}; DATA.companies.forEach((c,i)=>order[c.id]=i);
+  let leads=DATA.people.filter(isLeadRole);
+  leads.sort((a,b)=>(order[a.company_id]??999)-(order[b.company_id]??999));
+  const f=window._leadFilter||"all";
+  const stageOf=p=>leadStage(p.outreach);
+  if(f==="todo") leads=leads.filter(p=>!(p.outreach&&p.outreach.invite_sent));
+  if(f==="due") leads=leads.filter(p=>{const s=stageOf(p);return s&&s.k==="due";});
+  if(f==="replied") leads=leads.filter(p=>{const s=stageOf(p);return s&&(s.k==="replied");});
+  const counts={all:DATA.people.filter(isLeadRole).length,
+    todo:DATA.people.filter(p=>isLeadRole(p)&&!(p.outreach&&p.outreach.invite_sent)).length,
+    due:DATA.people.filter(p=>{if(!isLeadRole(p))return false;const s=stageOf(p);return s&&s.k==="due";}).length,
+    replied:DATA.people.filter(p=>{if(!isLeadRole(p))return false;const s=stageOf(p);return s&&s.k==="replied";}).length};
+  const cName=id=>(DATA.companies.find(c=>c.id===id)||{}).name||"";
+  shell(`<h2 class="page">🎯 Leads Invite</h2>
+  <div class="sub">Send connection invites in dashboard order. No reply in 3 days ➜ send an ad (DM). Replied ➜ send a tailored draft. Marked here + saved on Sync.</div>
+  <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+    ${[["all","All"],["todo","Not invited"],["due","Due for ad (3d+)"],["replied","Replied"]].map(([k,l])=>
+      `<button class="${f===k?"primary":""}" onclick="window._leadFilter='${k}';leadsPage()">${l} (${counts[k]})</button>`).join("")}
+  </div>
+  <table><thead><tr><th>Role — Company</th><th>Contact</th><th>Channels</th><th>Invite flow</th></tr></thead><tbody>
+  ${leads.map(p=>{const o=p.outreach||{};const s=leadStage(o);
+    return `<tr>
+      <td><b>${p.title||p.role_bucket||"—"}</b><div class="muted">${cName(p.company_id)}</div></td>
+      <td><a href="#/person/${p.id}">${p.name}</a>${s?` <span class="tag ${s.cls}">${s.lbl}</span>`:""}</td>
+      <td>${leadChannelPills(p)}</td>
+      <td style="white-space:nowrap">
+        <label style="font-size:12px;margin-right:8px"><input type="checkbox" ${o.invite_sent?"checked":""} onchange="setLead('${p.id}','invite')"> invited</label>
+        <label style="font-size:12px;margin-right:8px"><input type="checkbox" ${o.followup_sent?"checked":""} onchange="setLead('${p.id}','followup')"> ad</label>
+        <label style="font-size:12px;margin-right:8px"><input type="checkbox" ${o.replied?"checked":""} onchange="setLead('${p.id}','replied')"> replied</label>
+        <label style="font-size:12px"><input type="checkbox" ${o.draft_sent?"checked":""} onchange="setLead('${p.id}','draft')"> draft</label>
+      </td></tr>`;}).join("")}
+  </tbody></table>`);
 }
 
 function companyPage(id){
@@ -354,6 +426,7 @@ function route(){
   if(h.startsWith("#/company/"))return companyPage(h.split("/")[2]);
   if(h.startsWith("#/person/"))return personPage(h.split("/")[2]);
   if(h.startsWith("#/actions"))return actionsPage();
+  if(h.startsWith("#/leads"))return leadsPage();
   dashboard();
 }
 function login(){
