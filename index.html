@@ -92,6 +92,15 @@ function setSigStatus(id,v){
 function emailStatusTag(p){
   return p.email_status==="found-public"?`<span class="tag meet" title="${p.email||""}">✉️ verified</span>`:"";
 }
+function liTag(p){
+  let t="";
+  if(p.li_warm)t+=`<span class="tag meet" title="${p.li_mutual||1} mutual connection — warm intro path">🔥 warm (${p.li_degree||"2nd"})</span>`;
+  else if(p.li_verified)t+=`<span class="tag intro" title="Verified on Sales Navigator">✔ LI ${p.li_degree||""}</span>`;
+  else if(p.li_status==="offshore")t+=`<span class="tag custom" title="Offshore support — not a target">offshore</span>`;
+  else if(p.li_status==="not-found")t+=`<span class="tag resp" title="Could not verify on LinkedIn">LI unverified</span>`;
+  if(p.li_active)t+=`<span class="tag resp" title="Recently active on LinkedIn — engagement candidate">📣 active</span>`;
+  return t;
+}
 function companyEmailTag(c){
   const ppl=(c.people||[]).map(pid=>DATA.people.find(p=>p.id===pid)).filter(Boolean);
   return ppl.some(p=>p.email_status==="found-public")?`<span class="tag meet">✉️</span>`:"";
@@ -306,7 +315,7 @@ function leadsPage(){
   ${leads.map(p=>{const o=p.outreach||{};const s=leadStage(o);
     return `<tr>
       <td><b>${p.title||p.role_bucket||"—"}</b><div class="muted">${cName(p.company_id)}</div></td>
-      <td><a href="#/person/${p.id}">${p.name}</a>${s?` <span class="tag ${s.cls}">${s.lbl}</span>`:""}</td>
+      <td><a href="#/person/${p.id}">${p.name}</a>${liTag(p)}${s?` <span class="tag ${s.cls}">${s.lbl}</span>`:""}</td>
       <td>${leadChannelPills(p)}</td>
       <td style="white-space:nowrap">
         <label style="font-size:12px;margin-right:8px"><input type="checkbox" ${o.invite_sent?"checked":""} onchange="setLead('${p.id}','invite')"> invited</label>
@@ -358,8 +367,9 @@ function personPage(id){
   p.custom=p.custom||[];
   const o=p.outreach;
   shell(`<a class="crumb" href="#/company/${p.company_id}">&larr; ${p.company}</a>
-  <h2 class="page">${p.name}${tagHtml(personStage(p))}${emailStatusTag(p)}</h2>
-  <div class="sub">${p.title}</div>
+  <h2 class="page">${p.name}${tagHtml(personStage(p))}${emailStatusTag(p)}${liTag(p)}</h2>
+  <div class="sub">${p.title}${p.li_location?` · ${p.li_location}`:""}</div>
+  ${p.li_note?`<p class="muted" style="margin-top:6px">🔎 Sales Nav: ${p.li_note}</p>`:""}
   <div class="card"><h3>Profile</h3><div class="grid" style="margin-top:10px">
     <div class="kv">Email<b>${p.email?`<a href="mailto:${p.email}">${p.email}</a> ${emailStatusTag(p)}${p.email_source?`<div class="muted" style="font-weight:400">via ${p.email_source}${p.email_source_url?` · <a href="${p.email_source_url}" target="_blank" rel="noopener">source</a>`:""}</div>`:""}`:"—"}</b></div>
     <div class="kv">Role bucket<b>${p.role_bucket||"—"}</b></div>
