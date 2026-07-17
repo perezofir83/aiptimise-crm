@@ -59,7 +59,7 @@ const $=s=>document.querySelector(s);
 const app=$("#app");
 const enc=new TextEncoder(), dec=new TextDecoder();
 const b64d=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
-const b64e=b=>btoa(String.fromCharCode(...new Uint8Array(b)));
+const b64e=b=>{const u=new Uint8Array(b);let s="";for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s);};
 
 async function deriveKey(email,pass,salt){
   const km=await crypto.subtle.importKey("raw",enc.encode(email.trim().toLowerCase()+":"+pass),"PBKDF2",false,["deriveKey"]);
@@ -476,16 +476,23 @@ function showSettings(){
 async function syncToGitHub(){
   const tok=localStorage.getItem(TOK_KEY);
   if(!tok)return alert("Set a GitHub token in Settings first.");
-  const salt=crypto.getRandomValues(new Uint8Array(16));
-  const key=await deriveKey(CREDS.email,CREDS.pass,salt);
-  const nonce=crypto.getRandomValues(new Uint8Array(12));
-  const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv:nonce},key,enc.encode(JSON.stringify(DATA)));
-  const blob=JSON.stringify({v:1,kdf:"PBKDF2-SHA256-200000",salt:b64e(salt),nonce:b64e(nonce),ct:b64e(ct)});
   const repo="perezofir83/aiptimise-crm", path="data.enc.json";
-  const meta=await (await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{headers:{Authorization:"Bearer "+tok}})).json();
-  const res=await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{method:"PUT",headers:{Authorization:"Bearer "+tok},
-    body:JSON.stringify({message:"crm: update data ("+new Date().toISOString()+")",content:btoa(unescape(encodeURIComponent(blob))),sha:meta.sha})});
-  if(res.ok){localStorage.removeItem(OV_KEY);flash("Synced to GitHub ✓")}else alert("Sync failed: "+res.status);
+  try{
+    flash("Syncing…");
+    const salt=crypto.getRandomValues(new Uint8Array(16));
+    const key=await deriveKey(CREDS.email,CREDS.pass,salt);
+    const nonce=crypto.getRandomValues(new Uint8Array(12));
+    const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv:nonce},key,enc.encode(JSON.stringify(DATA)));
+    const blob=JSON.stringify({v:1,kdf:"PBKDF2-SHA256-200000",salt:b64e(salt),nonce:b64e(nonce),ct:b64e(ct)});
+    const hdr={Authorization:"Bearer "+tok,Accept:"application/vnd.github+json"};
+    const metaRes=await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{headers:hdr});
+    if(!metaRes.ok) return alert("Sync failed reading file: "+metaRes.status+" — "+(await metaRes.text()).slice(0,180));
+    const meta=await metaRes.json();
+    const res=await fetch(`https://api.github.com/repos/${repo}/contents/${path}`,{method:"PUT",headers:hdr,
+      body:JSON.stringify({message:"crm: update data ("+new Date().toISOString()+")",content:btoa(unescape(encodeURIComponent(blob))),sha:meta.sha})});
+    if(res.ok){localStorage.removeItem(OV_KEY);flash("Synced to GitHub ✓");}
+    else alert("Sync failed: "+res.status+" — "+(await res.text()).slice(0,180));
+  }catch(e){alert("Sync error: "+(e&&e.message?e.message:e));}
 }
 
 /* ---------- router & login ---------- */
