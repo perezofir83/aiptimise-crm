@@ -272,12 +272,11 @@ function leadChannelPills(p){
 }
 function leadStage(o){
   o=o||{};
-  if(o.draft_sent)return{k:"draft",lbl:"Draft sent",cls:"meet"};
-  if(o.replied||o.response_received)return{k:"replied",lbl:"Replied ➜ send draft",cls:"resp"};
-  if(o.followup_sent)return{k:"followup",lbl:"Ad sent",cls:"intro"};
+  if(o.draft_sent)return{k:"draft",lbl:"Message sent",cls:"meet"};
+  if(o.replied||o.response_received)return{k:"replied",lbl:"Replied",cls:"resp"};
+  if(o.accepted)return{k:"accepted",lbl:"Accepted ➜ send message",cls:"meet"};
   if(o.invite_sent){
     const d=daysSince(o.invite_date);
-    if(d!==null&&d>=3)return{k:"due",lbl:`Invited ${d}d ago ➜ send ad`,cls:"custom"};
     return{k:"invited",lbl:`Invited${d!==null?` ${d}d`:""}`,cls:"intro"};
   }
   return null;
@@ -340,7 +339,7 @@ function setLead(id,field){
   const p=findP(id); const o=p.outreach=p.outreach||{};
   const now=new Date().toISOString();
   if(field==="invite"){ o.invite_sent=!o.invite_sent; o.invite_date=o.invite_sent?now:null; }
-  if(field==="followup"){ o.followup_sent=!o.followup_sent; o.followup_date=o.followup_sent?now:null; }
+  if(field==="accepted"){ o.accepted=!o.accepted; o.accepted_date=o.accepted?now:null; }
   if(field==="replied"){ o.replied=!o.replied; o.response_received=o.replied; }
   if(field==="draft"){ o.draft_sent=!o.draft_sent; }
   saveEdit(p); leadsPage();
@@ -351,19 +350,21 @@ function leadsPage(){
   leads.sort((a,b)=>(order[a.company_id]??999)-(order[b.company_id]??999));
   const f=window._leadFilter||"all";
   const stageOf=p=>leadStage(p.outreach);
+  const stageIs=(p,k)=>{const s=stageOf(p);return s&&s.k===k;};
   if(f==="todo") leads=leads.filter(p=>!(p.outreach&&p.outreach.invite_sent));
-  if(f==="due") leads=leads.filter(p=>{const s=stageOf(p);return s&&s.k==="due";});
-  if(f==="replied") leads=leads.filter(p=>{const s=stageOf(p);return s&&(s.k==="replied");});
+  if(f==="invited") leads=leads.filter(p=>stageIs(p,"invited"));
+  if(f==="accepted") leads=leads.filter(p=>stageIs(p,"accepted"));
+  if(f==="replied") leads=leads.filter(p=>stageIs(p,"replied"));
+  const cnt=k=>DATA.people.filter(p=>isLeadRole(p)&&stageIs(p,k)).length;
   const counts={all:DATA.people.filter(isLeadRole).length,
     todo:DATA.people.filter(p=>isLeadRole(p)&&!(p.outreach&&p.outreach.invite_sent)).length,
-    due:DATA.people.filter(p=>{if(!isLeadRole(p))return false;const s=stageOf(p);return s&&s.k==="due";}).length,
-    replied:DATA.people.filter(p=>{if(!isLeadRole(p))return false;const s=stageOf(p);return s&&s.k==="replied";}).length};
+    invited:cnt("invited"), accepted:cnt("accepted"), replied:cnt("replied")};
   const cName=id=>(DATA.companies.find(c=>c.id===id)||{}).name||"";
   const na=s=>(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
   shell(`<h2 class="page">🎯 Leads Invite</h2>
-  <div class="sub">Send connection invites in dashboard order. No reply in 3 days ➜ send an ad (DM). Replied ➜ send a tailored draft. Marked here + saved on Sync.</div>
+  <div class="sub">Send connection invites in dashboard order. When they accept, tick <b>accepted</b> ➜ the 📝 Draft lights up as your reminder to send the full message. Marked here + saved on Sync.</div>
   <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-    ${[["all","All"],["todo","Not invited"],["due","Due for ad (3d+)"],["replied","Replied"]].map(([k,l])=>
+    ${[["all","All"],["todo","Not invited"],["invited","Invited (awaiting)"],["accepted","Accepted"],["replied","Replied"]].map(([k,l])=>
       `<button class="${f===k?"primary":""}" onclick="window._leadFilter='${k}';leadsPage()">${l} (${counts[k]})</button>`).join("")}
   </div>
   <table><thead><tr><th>Role — Company</th><th>Contact</th><th>Draft</th><th>Channels</th><th>Invite flow</th><th>Notes</th></tr></thead><tbody>
@@ -371,11 +372,11 @@ function leadsPage(){
     return `<tr>
       <td><b>${p.title||p.role_bucket||"—"}</b><div class="muted">${cName(p.company_id)}</div></td>
       <td><a href="#/person/${p.id}">${p.name}</a>${liTag(p)}${s?` <span class="tag ${s.cls}">${s.lbl}</span>`:""}</td>
-      <td>${p.draft?`<a href="#" onclick="showDraft('${p.id}');return false" style="font-weight:600">📝 Draft</a>`:`<span class="muted" style="font-size:11px">—</span>`}</td>
+      <td>${p.draft?`<a href="#" onclick="showDraft('${p.id}');return false" style="font-weight:600${o.accepted&&!o.draft_sent?";color:var(--green)":""}" ${o.accepted&&!o.draft_sent?'title="Accepted — send the full message now"':""}>📝 Draft${o.accepted&&!o.draft_sent?" ●":""}</a>`:`<span class="muted" style="font-size:11px">—</span>`}</td>
       <td>${leadChannelPills(p)}</td>
       <td style="white-space:nowrap">
         <label style="font-size:12px;margin-right:8px"><input type="checkbox" ${o.invite_sent?"checked":""} onchange="setLead('${p.id}','invite')"> invited</label>
-        <label style="font-size:12px;margin-right:8px"><input type="checkbox" ${o.followup_sent?"checked":""} onchange="setLead('${p.id}','followup')"> ad</label>
+        <label style="font-size:12px;margin-right:8px"><input type="checkbox" ${o.accepted?"checked":""} onchange="setLead('${p.id}','accepted')"> accepted</label>
         <label style="font-size:12px;margin-right:8px"><input type="checkbox" ${o.replied?"checked":""} onchange="setLead('${p.id}','replied')"> replied</label>
         <label style="font-size:12px"><input type="checkbox" ${o.draft_sent?"checked":""} onchange="setLead('${p.id}','draft')"> draft</label>
       </td>
