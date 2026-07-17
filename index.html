@@ -368,16 +368,17 @@ function leadsPage(){
   if(f==="invited") leads=leads.filter(p=>stageIs(p,"invited"));
   if(f==="accepted") leads=leads.filter(p=>stageIs(p,"accepted"));
   if(f==="replied") leads=leads.filter(p=>stageIs(p,"replied"));
+  if(f==="sent") leads=leads.filter(p=>stageIs(p,"draft"));
   const cnt=k=>DATA.people.filter(p=>isLeadRole(p)&&stageIs(p,k)).length;
   const counts={all:DATA.people.filter(isLeadRole).length,
     todo:DATA.people.filter(p=>isLeadRole(p)&&!(p.outreach&&p.outreach.invite_sent)).length,
-    invited:cnt("invited"), accepted:cnt("accepted"), replied:cnt("replied")};
+    invited:cnt("invited"), accepted:cnt("accepted"), replied:cnt("replied"), sent:cnt("draft")};
   const cName=id=>(DATA.companies.find(c=>c.id===id)||{}).name||"";
   const na=s=>(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
   shell(`<h2 class="page">🎯 Leads Invite</h2>
   <div class="sub">Send connection invites in dashboard order. When they accept, tick <b>accepted</b> ➜ the 📝 Draft lights up as your reminder to send the full message. Marked here + saved on Sync.</div>
   <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-    ${[["all","All"],["todo","Not invited"],["invited","Invited (awaiting)"],["accepted","Accepted"],["replied","Replied"]].map(([k,l])=>
+    ${[["all","All"],["todo","Not invited"],["invited","Invited (awaiting)"],["accepted","Accepted"],["replied","Replied"],["sent","Sent"]].map(([k,l])=>
       `<button class="${f===k?"primary":""}" onclick="window._leadFilter='${k}';leadsPage()">${l} (${counts[k]})</button>`).join("")}
   </div>
   <table><thead><tr><th>Role — Company</th><th>Contact</th><th>Draft</th><th>Channels</th><th>Invite flow</th><th>Notes</th></tr></thead><tbody>
