@@ -294,6 +294,7 @@ function fallbackCopy(t,done){
 }
 function showDraft(id){
   const p=findP(id); if(!p||!p.draft){flash("No draft for this lead");return;}
+  const o=p.outreach||{};
   const esc=s=>(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   // Sales Navigator lead links open Sales Nav, not the personal profile Yoni invites through.
   // For those, open a normal LinkedIn people-search by name+company instead — it lands on the
@@ -310,6 +311,14 @@ function showDraft(id){
   m.innerHTML=`<div class="card" style="max-width:640px;max-height:88vh;overflow:auto">
     <h3 style="margin:0 0 2px">${esc(p.name)}</h3>
     <div class="muted" style="font-size:12px;margin-bottom:14px">${esc(p.title||"")} · ${esc(p.company||"")}</div>
+
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-bottom:16px">
+      <span class="muted" style="font-size:11px;font-weight:700">Status</span>
+      <label style="font-size:12px"><input type="checkbox" ${o.invite_sent?"checked":""} onchange="setLead('${p.id}','invite')"> invited</label>
+      <label style="font-size:12px"><input type="checkbox" ${o.accepted?"checked":""} onchange="setLead('${p.id}','accepted')"> accepted</label>
+      <label style="font-size:12px"><input type="checkbox" ${o.replied?"checked":""} onchange="setLead('${p.id}','replied')"> replied</label>
+      <label style="font-size:12px"><input type="checkbox" ${o.draft_sent?"checked":""} onchange="setLead('${p.id}','draft')"> draft</label>
+    </div>
 
     <div style="font-size:12px;font-weight:700;margin-bottom:4px">1 · Connection note <span class="muted" style="font-weight:400">(send with the invite)</span></div>
     <textarea id="dnote" rows="4" style="width:100%;font:13px/1.5 inherit;padding:8px">${esc(p.draft.note)}</textarea>
