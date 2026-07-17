@@ -359,13 +359,14 @@ function leadsPage(){
     due:DATA.people.filter(p=>{if(!isLeadRole(p))return false;const s=stageOf(p);return s&&s.k==="due";}).length,
     replied:DATA.people.filter(p=>{if(!isLeadRole(p))return false;const s=stageOf(p);return s&&s.k==="replied";}).length};
   const cName=id=>(DATA.companies.find(c=>c.id===id)||{}).name||"";
+  const na=s=>(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
   shell(`<h2 class="page">🎯 Leads Invite</h2>
   <div class="sub">Send connection invites in dashboard order. No reply in 3 days ➜ send an ad (DM). Replied ➜ send a tailored draft. Marked here + saved on Sync.</div>
   <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
     ${[["all","All"],["todo","Not invited"],["due","Due for ad (3d+)"],["replied","Replied"]].map(([k,l])=>
       `<button class="${f===k?"primary":""}" onclick="window._leadFilter='${k}';leadsPage()">${l} (${counts[k]})</button>`).join("")}
   </div>
-  <table><thead><tr><th>Role — Company</th><th>Contact</th><th>Draft</th><th>Channels</th><th>Invite flow</th></tr></thead><tbody>
+  <table><thead><tr><th>Role — Company</th><th>Contact</th><th>Draft</th><th>Channels</th><th>Invite flow</th><th>Notes</th></tr></thead><tbody>
   ${leads.map(p=>{const o=p.outreach||{};const s=leadStage(o);
     return `<tr>
       <td><b>${p.title||p.role_bucket||"—"}</b><div class="muted">${cName(p.company_id)}</div></td>
@@ -377,7 +378,9 @@ function leadsPage(){
         <label style="font-size:12px;margin-right:8px"><input type="checkbox" ${o.followup_sent?"checked":""} onchange="setLead('${p.id}','followup')"> ad</label>
         <label style="font-size:12px;margin-right:8px"><input type="checkbox" ${o.replied?"checked":""} onchange="setLead('${p.id}','replied')"> replied</label>
         <label style="font-size:12px"><input type="checkbox" ${o.draft_sent?"checked":""} onchange="setLead('${p.id}','draft')"> draft</label>
-      </td></tr>`;}).join("")}
+      </td>
+      <td><input type="text" value="${na(p.user_notes)}" placeholder="page dead, problem…" title="Saved on Sync. Anything you type here reaches the team." style="width:180px;font-size:12px;padding:5px 8px" onchange="setNotes('${p.id}',this.value)"></td>
+      </tr>`;}).join("")}
   </tbody></table>`);
 }
 
