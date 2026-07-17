@@ -296,6 +296,17 @@ function fallbackCopy(t,done){
 function showDraft(id){
   const p=findP(id); if(!p||!p.draft){flash("No draft for this lead");return;}
   const esc=s=>(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  // Sales Navigator lead links open Sales Nav, not the personal profile Yoni invites through.
+  // For those, open a normal LinkedIn people-search by name+company instead — it lands on the
+  // public profile where the Connect button lives. Personal /in/ links open directly.
+  const liBtn=(()=>{
+    if(!p.linkedin) return "";
+    if(!/\/sales\//.test(p.linkedin))
+      return `<button onclick="window.open('${p.linkedin}','_blank','noopener')">Open profile ↗</button>`;
+    const q=encodeURIComponent([p.name,p.company].filter(Boolean).join(" ")).replace(/'/g,"%27");
+    const url=`https://www.linkedin.com/search/results/people/?keywords=${q}`;
+    return `<button onclick="window.open('${url}','_blank','noopener')" title="Opens a normal LinkedIn search — click the person, then Connect from their profile">Find on LinkedIn ↗</button>`;
+  })();
   const m=document.createElement("div");m.className="modal";
   m.innerHTML=`<div class="card" style="max-width:640px;max-height:88vh;overflow:auto">
     <h3 style="margin:0 0 2px">${esc(p.name)}</h3>
@@ -306,14 +317,14 @@ function showDraft(id){
     <div class="muted" style="font-size:11px;margin:2px 0 6px"><span id="dcount"></span> / 300 chars</div>
     <div style="display:flex;gap:8px;margin-bottom:16px">
       <button class="primary" onclick="copyText(document.getElementById('dnote').value,'Note')">Copy note</button>
-      ${p.linkedin?`<button onclick="window.open('${p.linkedin}','_blank','noopener')">Open profile ↗</button>`:""}
+      ${liBtn}
     </div>
 
     <div style="font-size:12px;font-weight:700;margin-bottom:4px">2 · Full message <span class="muted" style="font-weight:400">(after they connect / reply)</span></div>
     <textarea id="dmsg" rows="14" style="width:100%;font:13px/1.5 inherit;padding:8px">${esc(p.draft.msg)}</textarea>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="primary" onclick="copyText(document.getElementById('dmsg').value,'Message')">Copy message</button>
-      ${p.linkedin?`<button onclick="window.open('${p.linkedin}','_blank','noopener')">Open profile ↗</button>`:""}
+      ${liBtn}
       <button style="margin-left:auto" onclick="this.closest('.modal').remove()">Close</button>
     </div>
     <div class="muted" style="font-size:11px;margin-top:10px">Edits here are for this copy only — they aren't saved.</div>
@@ -417,7 +428,7 @@ function personPage(id){
   <div class="card"><h3>Profile</h3><div class="grid" style="margin-top:10px">
     <div class="kv">Email<b>${p.email?`<a href="mailto:${p.email}">${p.email}</a> ${emailStatusTag(p)}${p.email_source?`<div class="muted" style="font-weight:400">via ${p.email_source}${p.email_source_url?` · <a href="${p.email_source_url}" target="_blank" rel="noopener">source</a>`:""}</div>`:""}`:"—"}</b></div>
     <div class="kv">Role bucket<b>${p.role_bucket||"—"}</b></div>
-    <div class="kv">LinkedIn<b>${p.linkedin?`<a href="${p.linkedin}" target="_blank" rel="noopener">Open profile</a>`:"—"}</b></div>
+    <div class="kv">LinkedIn<b>${p.linkedin?(/\/sales\//.test(p.linkedin)?`<a href="https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent([p.name,p.company].filter(Boolean).join(" "))}" target="_blank" rel="noopener">Find on LinkedIn</a>`:`<a href="${p.linkedin}" target="_blank" rel="noopener">Open profile</a>`):"—"}</b></div>
     <div class="kv">Source<b>${p.source||"—"}</b></div></div>
     ${p.channels&&Object.keys(p.channels).length?`<div style="margin-top:12px"><div class="muted" style="margin-bottom:6px">📡 Other channels (not LinkedIn)</div>
       ${Object.entries(p.channels).map(([k,v])=>{const CH={x_twitter:"𝕏",personal_site:"🌐 site",forum_handle:"💬 forum",github:"🐙 GitHub",phone:"📞",instagram:"📷 IG"};const lbl=CH[k]||k;const href=v.url||(k==="phone"?"tel:"+v.value:v.value.startsWith("http")?v.value:null);return href?`<a class="pill" href="${href}" target="_blank" rel="noopener" title="${(v.note||'').replace(/"/g,'&quot;')}">${lbl}: ${v.value}</a>`:`<span class="pill" title="${(v.note||'').replace(/"/g,'&quot;')}">${lbl}: ${v.value}</span>`;}).join("")}
