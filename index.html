@@ -351,6 +351,10 @@ function setLead(id,field){
   if(field==="accepted"){ o.accepted=!o.accepted; o.accepted_date=o.accepted?now:null; }
   if(field==="replied"){ o.replied=!o.replied; o.response_received=o.replied; }
   if(field==="draft"){ o.draft_sent=!o.draft_sent; }
+  // Immediate confirmation — the modal covers the table, so without this a tick
+  // looks like "nothing happened". Fires for table and modal checkboxes alike.
+  const st={invite:["Invited",o.invite_sent],accepted:["Accepted",o.accepted],replied:["Replied",o.replied],draft:["Message sent",o.draft_sent]}[field];
+  if(st) flash((st[1]?"✓ ":"✗ ")+st[0]);
   saveEdit(p); leadsPage();
 }
 function leadsPage(){
