@@ -171,7 +171,8 @@ function shell(inner){
    <div class="wrap">${inner}</div>`;
 }
 let sortBy="crm_score", sortDir=-1;
-const ICP_BADGE={"above-cap":["Above $20M cap","resp"],"below-floor":["Below $500K","custom"],"thin-catalog":["Catalog <500","custom"],"fit-unverified":["Revenue unverified","intro"],"not-shopify":["Not Shopify","custom"]};
+const ICP_BADGE={"above-cap":["Above $20M cap","resp"],"below-floor":["Below $500K","custom"],"thin-catalog":["Catalog <500","custom"],"fit-unverified":["Revenue unverified","intro"],"not-shopify":["Not Shopify","custom"],"podcast-il":["🎙 פודקאסט ישראלי","meet"]};
+const customTags=c=>(c.tags||[]).map(t=>`<span class="tag intro">${t}</span>`).join("");
 function icpHtml(c){const b=ICP_BADGE[c.icp];return b?`<span class="tag ${b[1]}" title="Yoni's ICP: catalog 500+, revenue $0.5M–$20M">${b[0]}</span>`:""}
 function usHtml(c){
   const flag=c.us_based===true?"🇺🇸 Yes":c.us_based===false?"No":"?";
@@ -180,7 +181,8 @@ function usHtml(c){
 function dashboard(){
   const q=(window._q||"").toLowerCase();
   let rows=DATA.companies.filter(c=>!q||c.name.toLowerCase().includes(q)||c.domain.includes(q)||c.niche.toLowerCase().includes(q));
-  if(!window._showAll) rows=rows.filter(c=>c.icp==="fit"||c.icp==="fit-unverified");
+  if(window._podcastOnly) rows=rows.filter(c=>c.icp==="podcast-il");
+  else if(!window._showAll) rows=rows.filter(c=>c.icp==="fit"||c.icp==="fit-unverified");
   const counts={};for(const c of DATA.companies)if(c.triage)counts[c.triage]=(counts[c.triage]||0)+1;
   if(window._triage) rows=rows.filter(c=>c.triage===window._triage);
   rows.sort((a,b)=>{let va=a[sortBy],vb=b[sortBy];
@@ -193,6 +195,7 @@ function dashboard(){
   <div class="search" style="display:flex;gap:12px;align-items:center">
     <input type="text" style="flex:1" placeholder="Search company / niche..." value="${window._q||""}" oninput="window._q=this.value;dashboard()">
     <label class="muted" style="white-space:nowrap"><input type="checkbox" ${window._showAll?"checked":""} onchange="window._showAll=this.checked;dashboard()"> Show non-ICP (above cap etc.)</label>
+    <label class="muted" style="white-space:nowrap"><input type="checkbox" ${window._podcastOnly?"checked":""} onchange="window._podcastOnly=this.checked;dashboard()"> 🎙 פודקאסט ישראלי (${DATA.companies.filter(c=>c.icp==="podcast-il").length})</label>
   </div>
   <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
     <button class="${!window._triage?"primary":""}" onclick="window._triage=null;dashboard()">All</button>
@@ -206,7 +209,7 @@ function dashboard(){
     <th onclick="setSort('crm_score')">Score</th></tr></thead><tbody>
   ${rows.map(c=>`<tr class="row" onclick="location.hash='#/company/${c.id}'">
     <td>${triageSelect(c)}</td>
-    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${triageTag(c)}${icpHtml(c)}${sigChips(c)}${companyEmailTag(c)}${companyChannelTag(c)}<div class="muted">${c.domain} · ${c.niche}</div></td>
+    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${triageTag(c)}${icpHtml(c)}${customTags(c)}${sigChips(c)}${companyEmailTag(c)}${companyChannelTag(c)}<div class="muted">${c.domain} · ${c.niche}</div></td>
     <td>${c.revenue||"—"}</td>
     <td>${c.catalog.label}</td>
     <td>${c.ai_ready.label}${c.ai_ready.llms_txt?"":" · no llms.txt"}</td>
@@ -403,7 +406,7 @@ function companyPage(id){
   const c=DATA.companies.find(x=>x.id===id); if(!c)return dashboard();
   const ppl=c.people.map(pid=>DATA.people.find(p=>p.id===pid)).filter(Boolean);
   shell(`<a class="crumb" href="#/">&larr; Dashboard</a>
-  <h2 class="page">${c.name}${tagHtml(companyStage(c))}${triageTag(c)}</h2>
+  <h2 class="page">${c.name}${tagHtml(companyStage(c))}${triageTag(c)}${customTags(c)}</h2>
   <div class="sub" style="display:flex;gap:12px;align-items:center">${c.niche} · ${c.hq||""} · Shopify &nbsp; ${triageSelect(c)}</div>
   <div class="card"><div class="grid">
     <div class="kv">Revenue (est)<b>${c.revenue||"—"}</b></div>
