@@ -402,6 +402,48 @@ function leadsPage(){
   </tbody></table>`);
 }
 
+// AI-visibility card: the lead's own ladder test — verdict, both rungs, who won
+// instead, plus proof slots (screenshot / shareable link) when a browser run
+// captured them. Ladder records carry broad+specific; older ones a single prompt.
+const VERDICT_META={
+  "absent":            ["🔴","Absent from both rungs","var(--red)"],
+  "discovery-only":    ["🟡","Wins discovery, loses the buying question","#d9a441"],
+  "specific-only":     ["🔵","Wins its niche, invisible on breadth","#4a9fd8"],
+  "wins-both":         ["🟢","Appears on both rungs","var(--green)"],
+};
+function rungHtml(label,r){
+  if(!r)return"";
+  const yes=r.appeared;
+  return `<div style="margin-top:12px">
+    <div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.04em">${label}</div>
+    <div style="margin-top:3px;font-size:14px;font-style:italic">“${r.prompt||"—"}”</div>
+    <div style="margin-top:4px;font-size:14px"><b style="color:${yes?"var(--green)":"var(--red)"}">${yes?"✓ Appeared":"✗ Did not appear"}</b></div>
+    ${(r.retailers||[]).length?`<div class="muted" style="margin-top:3px;font-size:13px">Recommended instead: ${r.retailers.join(" · ")}</div>`:""}
+  </div>`;
+}
+function aiTestCard(c){
+  const tests=c.ai_tests||[]; if(!tests.length)return"";
+  return tests.map(t=>{
+    const m=VERDICT_META[t.verdict];
+    const shot=t.screenshot, link=t.share_url;
+    return `<div class="card" style="border-left:3px solid ${m?m[2]:"var(--muted)"}">
+      <h3>🤖 AI Visibility <span class="muted" style="font-weight:400;font-size:13px">· ${t.surface||"?"} · ${t.date||""}</span></h3>
+      ${m?`<div style="margin-top:8px;font-size:15px"><b style="color:${m[2]}">${m[0]} ${t.verdict}</b> <span class="muted">— ${m[1]}</span></div>`:""}
+      ${rungHtml("Broad — “which stores are good”",t.broad)}
+      ${rungHtml("Buying intent — “what should I buy”",t.specific)}
+      ${t.prompt?rungHtml("Prompt",{prompt:t.prompt,appeared:t.store_appeared,retailers:t.recommended_retailers}):""}
+      ${t.notes?`<div style="margin-top:12px;font-size:14px;line-height:1.6"><b>Summary:</b> ${t.notes}</div>`:""}
+      <div style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        ${link?`<a class="pill" href="${link}" target="_blank" rel="noopener">🔗 Open the actual answer</a>`
+              :`<span class="pill" style="opacity:.45;cursor:default" title="No shareable link captured — this test ran via search agents, not a live browser session">🔗 No link captured</span>`}
+        ${shot?`<a class="pill" href="${shot}" target="_blank" rel="noopener">📸 Screenshot</a>`
+              :`<span class="pill" style="opacity:.45;cursor:default" title="No screenshot captured — needs a browser run on this company">📸 No screenshot</span>`}
+      </div>
+      ${(!link&&!shot)?`<div class="muted" style="margin-top:8px;font-size:12px">Result recorded from a search-agent run. Re-run in the browser to capture proof for outreach.</div>`:""}
+    </div>`;
+  }).join("");
+}
+
 function companyPage(id){
   const c=DATA.companies.find(x=>x.id===id); if(!c)return dashboard();
   const ppl=c.people.map(pid=>DATA.people.find(p=>p.id===pid)).filter(Boolean);
@@ -426,6 +468,7 @@ function companyPage(id){
       <div style="margin-top:3px">${s.summary||""}</div>
       <div style="margin-top:3px;color:var(--green);font-size:13px">➜ ${s.action||""}</div></div>`).join("")}
     <div style="margin-top:12px"><a href="#/actions">Open Action Queue →</a></div></div>`:""}
+  ${aiTestCard(c)}
   <div class="card"><h3>What they do</h3><p style="margin-top:8px;font-size:14px;line-height:1.6">${c.about||"—"}</p>
   ${c.history?`<p class="muted" style="margin-top:6px">${c.history}</p>`:""}</div>
   <div class="card"><h3>Links</h3><div style="margin-top:10px">
