@@ -184,6 +184,7 @@ function dashboard(){
   if(window._podcastOnly) rows=rows.filter(c=>c.icp==="podcast-il");
   else if(!window._showAll) rows=rows.filter(c=>c.icp==="fit"||c.icp==="fit-unverified");
   const counts={};for(const c of DATA.companies)if(c.triage)counts[c.triage]=(counts[c.triage]||0)+1;
+  const allCount=rows.length;
   if(window._triage) rows=rows.filter(c=>c.triage===window._triage);
   rows.sort((a,b)=>{let va=a[sortBy],vb=b[sortBy];
     if(sortBy==="ai"){va=a.ai_ready.score??999;vb=b.ai_ready.score??999}
@@ -198,7 +199,7 @@ function dashboard(){
     <label class="muted" style="white-space:nowrap"><input type="checkbox" ${window._podcastOnly?"checked":""} onchange="window._podcastOnly=this.checked;dashboard()"> 🎙 פודקאסט ישראלי (${DATA.companies.filter(c=>c.icp==="podcast-il").length})</label>
   </div>
   <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-    <button class="${!window._triage?"primary":""}" onclick="window._triage=null;dashboard()">All</button>
+    <button class="${!window._triage?"primary":""}" onclick="window._triage=null;dashboard()">All (${allCount})</button>
     ${Object.entries(TRIAGE).map(([k,[lbl]])=>`<button class="${window._triage===k?"primary":""}" onclick="window._triage='${k}';dashboard()">${lbl} (${counts[k]||0})</button>`).join("")}
   </div>
   <table><thead><tr>
