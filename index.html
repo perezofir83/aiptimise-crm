@@ -49,6 +49,8 @@
   .sbadge:hover{opacity:.85}
   .sbtn{margin-top:5px;font-size:11px;padding:3px 9px;background:var(--blue);color:#fff;border:none;border-radius:6px;cursor:pointer}
   .sbtn:hover{opacity:.9}
+  .ssent{font-size:11px;color:var(--dim);display:inline-flex;align-items:center;gap:3px;cursor:pointer;margin-left:8px;vertical-align:middle}
+  .ssent input{cursor:pointer;margin:0}
   textarea{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px;font-size:13px;min-height:70px}
   .flash{position:fixed;bottom:20px;right:20px;background:var(--green);color:#08281a;font-weight:700;padding:10px 18px;border-radius:10px;display:none;z-index:30}
 </style>
@@ -82,7 +84,7 @@ function setOverlay(o){localStorage.setItem(OV_KEY,JSON.stringify(o))}
 function applyOverlay(){
   const o=overlay();
   for(const p of DATA.people){ if(o[p.id]){ Object.assign(p.outreach,o[p.id].outreach||{}); p.custom=o[p.id].custom||p.custom; p.user_notes=o[p.id].user_notes??p.user_notes; } }
-  for(const c of DATA.companies){ if(o["c:"+c.id]){ c.triage=o["c:"+c.id].triage; } }
+  for(const c of DATA.companies){ if(o["c:"+c.id]){ c.triage=o["c:"+c.id].triage; } if(o["soc:"+c.id]){ c.social_sent=o["soc:"+c.id]; } }
   for(const s of (DATA.signals||[])){ if(o["s:"+s.id]){ s.status=o["s:"+s.id].status; } }
 }
 /* ---------- signals (playbooks action queue) ---------- */
@@ -138,6 +140,20 @@ function triageSelect(c){
   </select>`;
 }
 const triageTag=c=>c.triage?`<span class="tag ${TRIAGE[c.triage][1]}">${TRIAGE[c.triage][0]}</span>`:"";
+/* ---- Social "sent" marker (one message = all channels) ---- */
+function setSocialSent(id,on){
+  const c=DATA.companies.find(x=>x.id===id); if(!c)return;
+  const today=new Date().toISOString().slice(0,10);
+  c.social_sent = on ? {sent:true, ts:Date.now(), date:today} : undefined;
+  const o=overlay(); if(on) o["soc:"+id]=c.social_sent; else delete o["soc:"+id]; setOverlay(o);
+  flash(on?`Marked sent (${today}) — use Sync to publish`:"Unmarked — use Sync to publish"); route();
+}
+const socialSentTag=c=>(c.social_sent&&c.social_sent.sent)?`<span class="tag intro" title="Message sent to all social channels${c.social_sent.date?" on "+c.social_sent.date:""}">✅ sent${c.social_sent.date?" · "+c.social_sent.date:""}</span>`:"";
+function socialSentToggle(c){
+  if(!socialLinks(c).length)return "";
+  const on=!!(c.social_sent&&c.social_sent.sent);
+  return `<label class="ssent" onclick="event.stopPropagation()" title="Mark this message as sent to ALL social channels for this company"><input type="checkbox" ${on?"checked":""} onchange="setSocialSent('${c.id}',this.checked)"> sent</label>`;
+}
 function saveEdit(p){
   const o=overlay();
   o[p.id]={outreach:p.outreach,custom:p.custom||[],user_notes:p.user_notes||"",ts:Date.now()};
@@ -215,7 +231,7 @@ function dashboard(){
     <th onclick="setSort('crm_score')">Score</th></tr></thead><tbody>
   ${rows.map(c=>`<tr class="row" onclick="location.hash='#/company/${c.id}'">
     <td>${triageSelect(c)}</td>
-    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${triageTag(c)}${icpHtml(c)}${customTags(c)}${sigChips(c)}${companyEmailTag(c)}${companyChannelTag(c)}${socialBadges(c)}<div class="muted">${c.domain} · ${c.niche}</div>${socialBtn(c,true)}</td>
+    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${triageTag(c)}${icpHtml(c)}${customTags(c)}${sigChips(c)}${companyEmailTag(c)}${companyChannelTag(c)}${socialBadges(c)}${socialSentTag(c)}<div class="muted">${c.domain} · ${c.niche}</div>${socialBtn(c,true)}${socialSentToggle(c)}</td>
     <td>${c.revenue||"—"}</td>
     <td>${c.catalog.label}</td>
     <td>${c.ai_ready.label}${c.ai_ready.llms_txt?"":" · no llms.txt"}</td>
@@ -542,6 +558,7 @@ function companyPage(id){
     <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       ${socialBtn(c,false)}
       <button onclick="editSocialMsg()">✏️ Edit message</button>
+      ${socialLinks(c).length?`<label class="ssent" style="font-size:13px" title="Mark as sent to ALL social channels for this company"><input type="checkbox" ${(c.social_sent&&c.social_sent.sent)?"checked":""} onchange="setSocialSent('${c.id}',this.checked)"> ${(c.social_sent&&c.social_sent.sent)?("✅ Sent to all channels"+(c.social_sent.date?" · "+c.social_sent.date:"")):"Mark sent to all channels"}</label>`:""}
     </div>
     <div class="muted" style="font-size:11px;margin-top:8px">One click opens each channel in a new tab and copies the message below. Paste with ⌘V and send. (First time, allow pop-ups for this site.)</div>
     <details style="margin-top:10px"><summary class="muted" style="cursor:pointer;font-size:12px">Preview message for ${shortName(c)}</summary>
