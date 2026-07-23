@@ -44,6 +44,10 @@
   .addrow{margin-top:10px}
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:20}
   .modal .card{max-width:420px;width:92%}
+  .sbadges{display:inline-flex;gap:3px;vertical-align:middle;margin-left:4px}
+  .sbadge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:4px;color:#fff;font-size:10px;font-weight:800;line-height:16px}
+  .sbtn{margin-top:5px;font-size:11px;padding:3px 9px;background:var(--blue);color:#fff;border:none;border-radius:6px;cursor:pointer}
+  .sbtn:hover{opacity:.9}
   textarea{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px;font-size:13px;min-height:70px}
   .flash{position:fixed;bottom:20px;right:20px;background:var(--green);color:#08281a;font-weight:700;padding:10px 18px;border-radius:10px;display:none;z-index:30}
 </style>
@@ -210,7 +214,7 @@ function dashboard(){
     <th onclick="setSort('crm_score')">Score</th></tr></thead><tbody>
   ${rows.map(c=>`<tr class="row" onclick="location.hash='#/company/${c.id}'">
     <td>${triageSelect(c)}</td>
-    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${triageTag(c)}${icpHtml(c)}${customTags(c)}${sigChips(c)}${companyEmailTag(c)}${companyChannelTag(c)}<div class="muted">${c.domain} · ${c.niche}</div></td>
+    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${triageTag(c)}${icpHtml(c)}${customTags(c)}${sigChips(c)}${companyEmailTag(c)}${companyChannelTag(c)}${socialBadges(c)}<div class="muted">${c.domain} · ${c.niche}</div>${socialBtn(c,true)}</td>
     <td>${c.revenue||"—"}</td>
     <td>${c.catalog.label}</td>
     <td>${c.ai_ready.label}${c.ai_ready.llms_txt?"":" · no llms.txt"}</td>
@@ -295,6 +299,60 @@ function fallbackCopy(t,done){
   const ta=document.createElement("textarea");ta.value=t;ta.style.position="fixed";ta.style.opacity="0";
   document.body.appendChild(ta);ta.select();try{document.execCommand("copy");done();}catch(e){flash("Copy failed — select the text manually");}
   ta.remove();
+}
+/* ---- Social outreach: badges + one-click open-all(FB/IG/X) + copy message ---- */
+const SOCIAL_MSG_KEY="aiptimise_social_msg_v1";
+const SOCIAL_MSG_DEFAULT=`Hi {company} team 👋
+
+My name is Ofir, from Aiptimise.
+
+I searched for your brand inside the AI search models (ChatGPT, Gemini), and right now they're not recommending your products to shoppers who are ready to buy. That's real demand you can't see.
+
+We fix that, without touching your website. Any catalog size, any number of variants, live in up to 48 hours.
+
+For 23 years, SEO and paid media ruled commerce discovery. That just changed.
+
+We'd love for you to try it out, free. How about a quick call to see if there's a good fit?`;
+function socialMsgTpl(){return localStorage.getItem(SOCIAL_MSG_KEY)||SOCIAL_MSG_DEFAULT;}
+function shortName(c){
+  let n=(c&&c.name)||"";
+  n=n.replace(/\s*\(.*?\)\s*/g," ").trim();                       // drop parentheticals
+  let prev;                                                        // strip trailing legal suffixes repeatedly ("Co., Inc.")
+  do{prev=n;n=n.replace(/[,\s]+(?:inc|llc|l\.l\.c|ltd|co|corp|corporation|company|holdings|group)\.?$/i,"").replace(/[,\s]+$/,"").trim();}while(n!==prev);
+  return n||(c&&c.domain)||"there";
+}
+function socialMsgFor(c){return socialMsgTpl().replace(/\{company\}/g,shortName(c)).replace(/\{niche\}/g,(c&&c.niche)||"");}
+const SOCIAL_CH=[["facebook","f","#1877f2"],["instagram","IG","#e1306c"],["twitter","𝕏","#111"]];
+function socialLinks(c){const L=(c&&c.links)||{};return SOCIAL_CH.map(([k,lbl,col])=>L[k]?{k,lbl,col,url:L[k]}:null).filter(Boolean);}
+function socialBadges(c){
+  const s=socialLinks(c);if(!s.length)return "";
+  return `<span class="sbadges">`+s.map(x=>`<span class="sbadge" style="background:${x.col}" title="${x.k}">${x.lbl}</span>`).join("")+`</span>`;
+}
+function socialBtn(c,compact){
+  const s=socialLinks(c);
+  if(!s.length)return compact?"":`<span class="muted" style="font-size:12px">No Facebook / Instagram / Twitter on file</span>`;
+  const lbl=compact?`📣 Social`:`📣 Open all + copy message`;
+  return `<button class="sbtn" onclick="event.stopPropagation();socialBlast('${c.id}')" title="Opens ${s.map(x=>x.k).join(', ')} in new tabs and copies the message to your clipboard">${lbl} ↗</button>`;
+}
+function socialBlast(id){
+  const c=DATA.companies.find(x=>x.id===id);if(!c)return;
+  const s=socialLinks(c);if(!s.length){flash("No social channels for this company");return;}
+  copyText(socialMsgFor(c),"Message");        // copy FIRST — clipboard needs page focus, lost once tabs open
+  s.forEach(x=>window.open(x.url,"_blank","noopener"));
+}
+function editSocialMsg(){
+  const m=document.createElement("div");m.className="modal";
+  const cur=socialMsgTpl().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  m.innerHTML=`<div class="card" style="max-width:600px">
+    <h3 style="margin:0 0 4px">📣 Social outreach message</h3>
+    <p class="muted" style="font-size:12px;margin:0 0 10px">Same message for FB / IG / X. Use <code>{company}</code> (auto-filled, cleaned name) and <code>{niche}</code>.</p>
+    <textarea id="smsg" style="height:280px;font:13px/1.6 inherit">${cur}</textarea>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="primary" onclick="localStorage.setItem(SOCIAL_MSG_KEY,document.getElementById('smsg').value);this.closest('.modal').remove();flash('Message saved');route()">Save</button>
+      <button onclick="this.closest('.modal').remove()">Cancel</button>
+      <button style="margin-left:auto;color:var(--red)" onclick="localStorage.removeItem(SOCIAL_MSG_KEY);this.closest('.modal').remove();flash('Reset to default');route()">Reset to default</button>
+    </div></div>`;
+  document.body.appendChild(m);
 }
 function showDraft(id){
   const p=findP(id); if(!p||!p.draft){flash("No draft for this lead");return;}
@@ -475,6 +533,16 @@ function companyPage(id){
   <div class="card"><h3>Links</h3><div style="margin-top:10px">
     ${Object.entries(c.links).map(([k,v])=>`<a class="pill" href="${v}" target="_blank" rel="noopener">${k==="email"?"✉️ "+v.replace("mailto:",""):k}</a>`).join("")}
   </div></div>
+  <div class="card"><h3>📣 Social outreach</h3>
+    <div style="margin-top:8px">${socialLinks(c).length?`Channels: ${socialBadges(c)} <span class="muted" style="font-size:12px">(${socialLinks(c).map(x=>x.k).join(', ')})</span>`:'<span class="muted">No Facebook / Instagram / Twitter on file for this company.</span>'}</div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      ${socialBtn(c,false)}
+      <button onclick="editSocialMsg()">✏️ Edit message</button>
+    </div>
+    <div class="muted" style="font-size:11px;margin-top:8px">One click opens each channel in a new tab and copies the message below. Paste with ⌘V and send. (First time, allow pop-ups for this site.)</div>
+    <details style="margin-top:10px"><summary class="muted" style="cursor:pointer;font-size:12px">Preview message for ${shortName(c)}</summary>
+      <pre style="white-space:pre-wrap;font:13px/1.6 inherit;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:8px">${socialMsgFor(c).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre></details>
+  </div>
   <div class="card"><h3>People (${ppl.length})</h3>
     ${ppl.length?`<table><tbody>${ppl.map(p=>`<tr class="row" onclick="location.hash='#/person/${p.id}'">
       <td><b>${p.name}</b>${tagHtml(personStage(p))}${emailStatusTag(p)}${p.channels&&Object.keys(p.channels).length?`<span class="tag meet" title="${Object.keys(p.channels).join(', ')}">📡 ${Object.keys(p.channels).length}ch</span>`:""}<div class="muted">${p.title}</div></td>
