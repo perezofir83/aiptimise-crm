@@ -340,7 +340,9 @@ function socialBlast(id){
   const c=DATA.companies.find(x=>x.id===id);if(!c)return;
   const s=socialLinks(c);if(!s.length){flash("No social channels for this company");return;}
   copyText(socialMsgFor(c),"Message");        // copy FIRST — clipboard needs page focus, lost once tabs open
-  s.forEach(x=>window.open(x.url,"_blank","noopener"));
+  let blocked=0;                              // no "noopener" so window.open returns null when blocked -> detectable
+  s.forEach(x=>{const w=window.open(x.url,"_blank");if(!w)blocked++;});
+  if(blocked)setTimeout(()=>flash(`Message copied ✓ — but ${blocked}/${s.length} tabs were blocked. Allow pop-ups for this site (icon at the right of the address bar), or just click the ${s.map(x=>x.lbl).join(' / ')} badges.`),400);
 }
 function editSocialMsg(){
   const m=document.createElement("div");m.className="modal";
