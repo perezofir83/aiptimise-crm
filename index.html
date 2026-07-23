@@ -45,7 +45,8 @@
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:20}
   .modal .card{max-width:420px;width:92%}
   .sbadges{display:inline-flex;gap:3px;vertical-align:middle;margin-left:4px}
-  .sbadge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:4px;color:#fff;font-size:10px;font-weight:800;line-height:16px}
+  .sbadge{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:4px;color:#fff;font-size:10px;font-weight:800;line-height:16px;text-decoration:none;cursor:pointer}
+  .sbadge:hover{opacity:.85}
   .sbtn{margin-top:5px;font-size:11px;padding:3px 9px;background:var(--blue);color:#fff;border:none;border-radius:6px;cursor:pointer}
   .sbtn:hover{opacity:.9}
   textarea{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px;font-size:13px;min-height:70px}
@@ -326,7 +327,8 @@ const SOCIAL_CH=[["facebook","f","#1877f2"],["instagram","IG","#e1306c"],["twitt
 function socialLinks(c){const L=(c&&c.links)||{};return SOCIAL_CH.map(([k,lbl,col])=>L[k]?{k,lbl,col,url:L[k]}:null).filter(Boolean);}
 function socialBadges(c){
   const s=socialLinks(c);if(!s.length)return "";
-  return `<span class="sbadges">`+s.map(x=>`<span class="sbadge" style="background:${x.col}" title="${x.k}">${x.lbl}</span>`).join("")+`</span>`;
+  // clickable badges: each opens its own tab on a direct click (never popup-blocked)
+  return `<span class="sbadges">`+s.map(x=>`<a class="sbadge" href="${x.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="background:${x.col}" title="Open ${x.k}">${x.lbl}</a>`).join("")+`</span>`;
 }
 function socialBtn(c,compact){
   const s=socialLinks(c);
