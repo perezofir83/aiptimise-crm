@@ -84,7 +84,7 @@ function setOverlay(o){localStorage.setItem(OV_KEY,JSON.stringify(o))}
 function applyOverlay(){
   const o=overlay();
   for(const p of DATA.people){ if(o[p.id]){ Object.assign(p.outreach,o[p.id].outreach||{}); p.custom=o[p.id].custom||p.custom; p.user_notes=o[p.id].user_notes??p.user_notes; } }
-  for(const c of DATA.companies){ if(o["c:"+c.id]){ c.triage=o["c:"+c.id].triage; } if(o["soc:"+c.id]){ c.social_sent=o["soc:"+c.id]; } }
+  for(const c of DATA.companies){ if(o["c:"+c.id]){ c.triage=o["c:"+c.id].triage; } if(o["soc:"+c.id]){ c.social_sent=o["soc:"+c.id]; } if(o["socr:"+c.id]){ c.social_reply=o["socr:"+c.id]; } }
   for(const s of (DATA.signals||[])){ if(o["s:"+s.id]){ s.status=o["s:"+s.id].status; } }
 }
 /* ---------- signals (playbooks action queue) ---------- */
@@ -140,15 +140,24 @@ function triageSelect(c){
   </select>`;
 }
 const triageTag=c=>c.triage?`<span class="tag ${TRIAGE[c.triage][1]}">${TRIAGE[c.triage][0]}</span>`:"";
-/* ---- Social "sent" marker (one message = all channels) ---- */
+/* ---- Social "sent" + "replied" markers (one message = all channels; variant tracked for measurement) ---- */
 function setSocialSent(id,on){
   const c=DATA.companies.find(x=>x.id===id); if(!c)return;
   const today=new Date().toISOString().slice(0,10);
-  c.social_sent = on ? {sent:true, ts:Date.now(), date:today} : undefined;
+  const v=socialVariant(c);
+  c.social_sent = on ? {sent:true, ts:Date.now(), date:today, oi:v.oi, ai:v.ai} : undefined;
   const o=overlay(); if(on) o["soc:"+id]=c.social_sent; else delete o["soc:"+id]; setOverlay(o);
-  flash(on?`Marked sent (${today}) — use Sync to publish`:"Unmarked — use Sync to publish"); route();
+  flash(on?`Marked sent (${today}, variant ${v.oi+1}·${v.ai+1}) — use Sync to publish`:"Unmarked — use Sync to publish"); route();
 }
-const socialSentTag=c=>(c.social_sent&&c.social_sent.sent)?`<span class="tag intro" title="Message sent to all social channels${c.social_sent.date?" on "+c.social_sent.date:""}">✅ sent${c.social_sent.date?" · "+c.social_sent.date:""}</span>`:"";
+function setSocialReply(id,on){
+  const c=DATA.companies.find(x=>x.id===id); if(!c)return;
+  const today=new Date().toISOString().slice(0,10);
+  c.social_reply = on ? {replied:true, ts:Date.now(), date:today} : undefined;
+  const o=overlay(); if(on) o["socr:"+id]=c.social_reply; else delete o["socr:"+id]; setOverlay(o);
+  flash(on?`Marked replied (${today}) — use Sync to publish`:"Unmarked reply — use Sync to publish"); route();
+}
+const socialSentTag=c=>(c.social_sent&&c.social_sent.sent)?`<span class="tag intro" title="Message sent to all social channels${c.social_sent.date?" on "+c.social_sent.date:""} · variant ${variantLabel(c)}">✅ sent${c.social_sent.date?" · "+c.social_sent.date:""}</span>`:"";
+const socialReplyTag=c=>(c.social_reply&&c.social_reply.replied)?`<span class="tag meet" title="Replied${c.social_reply.date?" on "+c.social_reply.date:""}">💬 replied</span>`:"";
 function socialSentToggle(c){
   if(!socialLinks(c).length)return "";
   const on=!!(c.social_sent&&c.social_sent.sent);
@@ -218,6 +227,7 @@ function dashboard(){
     <input type="text" style="flex:1" placeholder="Search company / niche..." value="${window._q||""}" oninput="window._q=this.value;dashboard()">
     <label class="muted" style="white-space:nowrap"><input type="checkbox" ${window._showAll?"checked":""} onchange="window._showAll=this.checked;dashboard()"> Show non-ICP (above cap etc.)</label>
     <label class="muted" style="white-space:nowrap"><input type="checkbox" ${window._podcastOnly?"checked":""} onchange="window._podcastOnly=this.checked;dashboard()"> 🎙 פודקאסט ישראלי (${DATA.companies.filter(c=>c.icp==="podcast-il").length})</label>
+    <button onclick="socialStats()" title="Social outreach performance by variant" style="white-space:nowrap">📊 Social stats</button>
   </div>
   <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
     <button class="${!window._triage?"primary":""}" onclick="window._triage=null;dashboard()">All (${allCount})</button>
@@ -231,7 +241,7 @@ function dashboard(){
     <th onclick="setSort('crm_score')">Score</th></tr></thead><tbody>
   ${rows.map(c=>`<tr class="row" onclick="location.hash='#/company/${c.id}'">
     <td>${triageSelect(c)}</td>
-    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${triageTag(c)}${icpHtml(c)}${customTags(c)}${sigChips(c)}${companyEmailTag(c)}${companyChannelTag(c)}${socialBadges(c)}${socialSentTag(c)}<div class="muted">${c.domain} · ${c.niche}</div>${socialBtn(c,true)}${socialSentToggle(c)}</td>
+    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${triageTag(c)}${icpHtml(c)}${customTags(c)}${sigChips(c)}${companyEmailTag(c)}${companyChannelTag(c)}${socialBadges(c)}${socialSentTag(c)}${socialReplyTag(c)}<div class="muted">${c.domain} · ${c.niche}</div>${socialBtn(c,true)}${socialSentToggle(c)}</td>
     <td>${c.revenue||"—"}</td>
     <td>${c.catalog.label}</td>
     <td>${c.ai_ready.label}${c.ai_ready.llms_txt?"":" · no llms.txt"}</td>
@@ -318,19 +328,26 @@ function fallbackCopy(t,done){
   ta.remove();
 }
 /* ---- Social outreach: badges + one-click open-all(FB/IG/X) + copy message ---- */
-const SOCIAL_MSG_KEY="aiptimise_social_msg_v1";
-const SOCIAL_MSG_DEFAULT=`Hi {company} team 👋
+// 5 openers × 3 ads = 15 combos. Each company gets a stable, measurable variant.
+const SOCIAL_OPENERS=[
+  "Hi {company} team 👋 I'm Ofir from Aiptimise.",
+  "Hey team, Ofir here from Aiptimise.",
+  "Hello {company} 👋 My name is Ofir, from Aiptimise.",
+  "Hi there, I'm Ofir from Aiptimise.",
+  "Hey {company} team! Ofir from Aiptimise here.",
+];
+const SOCIAL_ADS=[
+  `Every day, shoppers are discovering products through AI instead of Google. The brands showing up are getting the clicks. The rest are being skipped.
 
-My name is Ofir, from Aiptimise.
+Aiptimise helps Shopify brands become visible across AI search and shopping experiences by optimizing product data and publishing it directly to AI platforms. Our customers have already more than doubled their AI traffic and unlocked a brand-new acquisition channel.`,
+  `You're already spending thousands on SEO and paid ads. But if you're not optimizing for AI, you're missing one of the fastest-growing traffic channels in ecommerce.
 
-I searched for your brand inside the AI search models (ChatGPT, Gemini), and right now they're not recommending your products to shoppers who are ready to buy. That's real demand you can't see.
+Aiptimise makes your products visible across AI platforms through catalog optimization and direct publishing. Our customers are already seeing more than 2x growth in AI traffic, with no changes to their storefront.`,
+  `AI is becoming the new source of ecommerce traffic. The brands that appear in AI recommendations will win the next generation of customers. Everyone else will lose those clicks to competitors.
 
-We fix that, without touching your website. Any catalog size, any number of variants, live in up to 48 hours.
-
-For 23 years, SEO and paid media ruled commerce discovery. That just changed.
-
-We'd love for you to try it out, free. How about a quick call to see if there's a good fit?`;
-function socialMsgTpl(){return localStorage.getItem(SOCIAL_MSG_KEY)||SOCIAL_MSG_DEFAULT;}
+Aiptimise helps Shopify merchants increase their visibility across AI platforms by optimizing and publishing their product catalog for AI. Early customers have already more than doubled their AI traffic and opened a completely new acquisition channel.`,
+];
+const SOCIAL_CTA="Start your 30-day free trial: https://aiptimise.com/30daysfreetrial";
 function shortName(c){
   let n=(c&&c.name)||"";
   n=n.replace(/\s*\(.*?\)\s*/g," ").trim();                       // drop parentheticals
@@ -338,7 +355,18 @@ function shortName(c){
   do{prev=n;n=n.replace(/[,\s]+(?:inc|llc|l\.l\.c|ltd|co|corp|corporation|company|holdings|group)\.?$/i,"").replace(/[,\s]+$/,"").trim();}while(n!==prev);
   return n||(c&&c.domain)||"there";
 }
-function socialMsgFor(c){return socialMsgTpl().replace(/\{company\}/g,shortName(c)).replace(/\{niche\}/g,(c&&c.niche)||"");}
+// deterministic FNV-1a hash → stable per-company variant (uniform spread, reproducible, measurable)
+function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+function socialVariant(c){
+  const id=(c&&c.id)||"";
+  return {oi:hashStr(id)%SOCIAL_OPENERS.length, ai:hashStr(id+"|ad")%SOCIAL_ADS.length};
+}
+const variantLabel=c=>{const v=socialVariant(c);return `O${v.oi+1}·A${v.ai+1}`;};
+function socialMsgFor(c){
+  const v=socialVariant(c);
+  const opener=SOCIAL_OPENERS[v.oi].replace(/\{company\}/g,shortName(c)).replace(/\{niche\}/g,(c&&c.niche)||"");
+  return `${opener}\n\n${SOCIAL_ADS[v.ai]}\n\n${SOCIAL_CTA}`;
+}
 const SOCIAL_CH=[["facebook","f","#1877f2"],["instagram","IG","#e1306c"],["twitter","𝕏","#111"]];
 function socialLinks(c){const L=(c&&c.links)||{};return SOCIAL_CH.map(([k,lbl,col])=>L[k]?{k,lbl,col,url:L[k]}:null).filter(Boolean);}
 function socialBadges(c){
@@ -360,18 +388,42 @@ function socialBlast(id){
   s.forEach(x=>{const w=window.open(x.url,"_blank");if(!w)blocked++;});
   if(blocked)setTimeout(()=>flash(`Message copied ✓ — but ${blocked}/${s.length} tabs were blocked. Allow pop-ups for this site (icon at the right of the address bar), or just click the ${s.map(x=>x.lbl).join(' / ')} badges.`),400);
 }
-function editSocialMsg(){
+const esc0=s=>(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+function editSocialMsg(){   // now a read-only reference of all live variants (copy is fixed in code)
   const m=document.createElement("div");m.className="modal";
-  const cur=socialMsgTpl().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-  m.innerHTML=`<div class="card" style="max-width:600px">
-    <h3 style="margin:0 0 4px">📣 Social outreach message</h3>
-    <p class="muted" style="font-size:12px;margin:0 0 10px">Same message for FB / IG / X. Use <code>{company}</code> (auto-filled, cleaned name) and <code>{niche}</code>.</p>
-    <textarea id="smsg" style="height:280px;font:13px/1.6 inherit">${cur}</textarea>
-    <div style="display:flex;gap:8px;margin-top:12px">
-      <button class="primary" onclick="localStorage.setItem(SOCIAL_MSG_KEY,document.getElementById('smsg').value);this.closest('.modal').remove();flash('Message saved');route()">Save</button>
-      <button onclick="this.closest('.modal').remove()">Cancel</button>
-      <button style="margin-left:auto;color:var(--red)" onclick="localStorage.removeItem(SOCIAL_MSG_KEY);this.closest('.modal').remove();flash('Reset to default');route()">Reset to default</button>
-    </div></div>`;
+  m.innerHTML=`<div class="card" style="max-width:640px;max-height:88vh;overflow:auto">
+    <h3 style="margin:0 0 4px">📣 Social message variants</h3>
+    <p class="muted" style="font-size:12px;margin:0 0 12px">5 openers × 3 ads = 15 combos. Each company gets a fixed, random combo (measurable). <code>{company}</code> auto-fills.</p>
+    <div style="font-weight:700;font-size:13px;margin:6px 0 4px">Openers</div>
+    ${SOCIAL_OPENERS.map((o,i)=>`<div style="font-size:12px;margin:3px 0"><b>O${i+1}.</b> ${esc0(o)}</div>`).join("")}
+    <div style="font-weight:700;font-size:13px;margin:12px 0 4px">Ads</div>
+    ${SOCIAL_ADS.map((a,i)=>`<div style="font-size:12px;margin:3px 0;padding:8px;background:var(--bg);border:1px solid var(--line);border-radius:6px"><b>A${i+1}.</b> ${esc0(a).replace(/\n/g,"<br>")}</div>`).join("")}
+    <div style="font-weight:700;font-size:13px;margin:12px 0 4px">CTA</div>
+    <div style="font-size:12px">${esc0(SOCIAL_CTA)}</div>
+    <div style="display:flex;gap:8px;margin-top:14px"><button onclick="this.closest('.modal').remove()">Close</button></div></div>`;
+  document.body.appendChild(m);
+}
+function socialStats(){       // per-opener / per-ad performance from the sent + replied markers
+  const O=SOCIAL_OPENERS.map(()=>({s:0,r:0})), A=SOCIAL_ADS.map(()=>({s:0,r:0}));
+  let ts=0,tr=0;
+  for(const c of DATA.companies){
+    if(!(c.social_sent&&c.social_sent.sent))continue;
+    const v=socialVariant(c);
+    const oi=(c.social_sent.oi!=null?c.social_sent.oi:v.oi), ai=(c.social_sent.ai!=null?c.social_sent.ai:v.ai);
+    const rep=!!(c.social_reply&&c.social_reply.replied);
+    O[oi].s++; A[ai].s++; ts++; if(rep){O[oi].r++; A[ai].r++; tr++;}
+  }
+  const rate=(x)=>x.s?Math.round(x.r/x.s*100)+"%":"—";
+  const rows=(arr,pref,txt)=>arr.map((x,i)=>`<tr><td style="padding:4px 8px"><b>${pref}${i+1}</b> <span class="muted" style="font-size:11px">${esc0(txt(i)).slice(0,46)}…</span></td><td style="padding:4px 8px;text-align:center">${x.s}</td><td style="padding:4px 8px;text-align:center">${x.r}</td><td style="padding:4px 8px;text-align:center;font-weight:700">${rate(x)}</td></tr>`).join("");
+  const m=document.createElement("div");m.className="modal";
+  m.innerHTML=`<div class="card" style="max-width:640px;max-height:88vh;overflow:auto">
+    <h3 style="margin:0 0 4px">📊 Social variant performance</h3>
+    <p class="muted" style="font-size:12px;margin:0 0 12px">${ts} sent · ${tr} replied · overall ${ts?Math.round(tr/ts*100):0}% reply rate. Mark “replied” on companies to grow this.</p>
+    <div style="font-weight:700;font-size:13px;margin:6px 0">By opener</div>
+    <table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:4px 8px">Opener</th><th style="padding:4px 8px">Sent</th><th style="padding:4px 8px">Replied</th><th style="padding:4px 8px">Rate</th></tr></thead><tbody>${rows(O,"O",i=>SOCIAL_OPENERS[i])}</tbody></table>
+    <div style="font-weight:700;font-size:13px;margin:14px 0 6px">By ad</div>
+    <table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:4px 8px">Ad</th><th style="padding:4px 8px">Sent</th><th style="padding:4px 8px">Replied</th><th style="padding:4px 8px">Rate</th></tr></thead><tbody>${rows(A,"A",i=>SOCIAL_ADS[i])}</tbody></table>
+    <div style="display:flex;gap:8px;margin-top:14px"><button onclick="this.closest('.modal').remove()">Close</button></div></div>`;
   document.body.appendChild(m);
 }
 function showDraft(id){
@@ -554,14 +606,16 @@ function companyPage(id){
     ${Object.entries(c.links).map(([k,v])=>`<a class="pill" href="${v}" target="_blank" rel="noopener">${k==="email"?"✉️ "+v.replace("mailto:",""):k}</a>`).join("")}
   </div></div>
   <div class="card"><h3>📣 Social outreach</h3>
-    <div style="margin-top:8px">${socialLinks(c).length?`Channels: ${socialBadges(c)} <span class="muted" style="font-size:12px">(${socialLinks(c).map(x=>x.k).join(', ')})</span>`:'<span class="muted">No Facebook / Instagram / Twitter on file for this company.</span>'}</div>
+    <div style="margin-top:8px">${socialLinks(c).length?`Channels: ${socialBadges(c)} <span class="muted" style="font-size:12px">(${socialLinks(c).map(x=>x.k).join(', ')})</span> &nbsp;·&nbsp; <span class="muted" style="font-size:12px">variant <b>${variantLabel(c)}</b></span>`:'<span class="muted">No Facebook / Instagram / Twitter on file for this company.</span>'}</div>
     <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       ${socialBtn(c,false)}
-      <button onclick="editSocialMsg()">✏️ Edit message</button>
+      <button onclick="editSocialMsg()">👁 View variants</button>
+      <button onclick="socialStats()">📊 Stats</button>
       ${socialLinks(c).length?`<label class="ssent" style="font-size:13px" title="Mark as sent to ALL social channels for this company"><input type="checkbox" ${(c.social_sent&&c.social_sent.sent)?"checked":""} onchange="setSocialSent('${c.id}',this.checked)"> ${(c.social_sent&&c.social_sent.sent)?("✅ Sent to all channels"+(c.social_sent.date?" · "+c.social_sent.date:"")):"Mark sent to all channels"}</label>`:""}
+      ${(c.social_sent&&c.social_sent.sent)?`<label class="ssent" style="font-size:13px" title="Mark that this company replied to the social message"><input type="checkbox" ${(c.social_reply&&c.social_reply.replied)?"checked":""} onchange="setSocialReply('${c.id}',this.checked)"> ${(c.social_reply&&c.social_reply.replied)?("💬 Replied"+(c.social_reply.date?" · "+c.social_reply.date:"")):"Mark replied"}</label>`:""}
     </div>
     <div class="muted" style="font-size:11px;margin-top:8px">One click opens each channel in a new tab and copies the message below. Paste with ⌘V and send. (First time, allow pop-ups for this site.)</div>
-    <details style="margin-top:10px"><summary class="muted" style="cursor:pointer;font-size:12px">Preview message for ${shortName(c)}</summary>
+    <details style="margin-top:10px"><summary class="muted" style="cursor:pointer;font-size:12px">Preview message for ${shortName(c)} (variant ${variantLabel(c)})</summary>
       <pre style="white-space:pre-wrap;font:13px/1.6 inherit;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:8px">${socialMsgFor(c).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre></details>
   </div>
   <div class="card"><h3>People (${ppl.length})</h3>
