@@ -163,6 +163,11 @@ function socialSentToggle(c){
   const on=!!(c.social_sent&&c.social_sent.sent);
   return `<label class="ssent" onclick="event.stopPropagation()" title="Mark this message as sent to ALL social channels for this company"><input type="checkbox" ${on?"checked":""} onchange="setSocialSent('${c.id}',this.checked)"> sent</label>`;
 }
+function socialReplyToggle(c){
+  if(!(c.social_sent&&c.social_sent.sent))return "";   // only meaningful once sent
+  const on=!!(c.social_reply&&c.social_reply.replied);
+  return `<label class="ssent" onclick="event.stopPropagation()" title="Mark that this company replied to the social message"><input type="checkbox" ${on?"checked":""} onchange="setSocialReply('${c.id}',this.checked)"> replied</label>`;
+}
 function saveEdit(p){
   const o=overlay();
   o[p.id]={outreach:p.outreach,custom:p.custom||[],user_notes:p.user_notes||"",ts:Date.now()};
@@ -241,7 +246,7 @@ function dashboard(){
     <th onclick="setSort('crm_score')">Score</th></tr></thead><tbody>
   ${rows.map(c=>`<tr class="row" onclick="location.hash='#/company/${c.id}'">
     <td>${triageSelect(c)}</td>
-    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${triageTag(c)}${icpHtml(c)}${customTags(c)}${sigChips(c)}${companyEmailTag(c)}${companyChannelTag(c)}${socialBadges(c)}${socialSentTag(c)}${socialReplyTag(c)}<div class="muted">${c.domain} · ${c.niche}</div>${socialBtn(c,true)}${socialSentToggle(c)}</td>
+    <td><b>${c.name}</b>${tagHtml(companyStage(c))}${triageTag(c)}${icpHtml(c)}${customTags(c)}${sigChips(c)}${companyEmailTag(c)}${companyChannelTag(c)}${socialBadges(c)}${socialSentTag(c)}${socialReplyTag(c)}<div class="muted">${c.domain} · ${c.niche}</div>${socialBtn(c,true)}${socialSentToggle(c)}${socialReplyToggle(c)}</td>
     <td>${c.revenue||"—"}</td>
     <td>${c.catalog.label}</td>
     <td>${c.ai_ready.label}${c.ai_ready.llms_txt?"":" · no llms.txt"}</td>
