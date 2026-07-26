@@ -215,7 +215,7 @@ function usHtml(c){
 }
 function dashboard(){
   const q=(window._q||"").toLowerCase();
-  let rows=DATA.companies.filter(c=>!q||c.name.toLowerCase().includes(q)||c.domain.includes(q)||c.niche.toLowerCase().includes(q));
+  let rows=DATA.companies.filter(c=>!q||c.name.toLowerCase().includes(q)||c.domain.includes(q)||c.niche.toLowerCase().includes(q)||(c.tags||[]).some(t=>String(t).toLowerCase().includes(q)));
   if(window._podcastOnly) rows=rows.filter(c=>c.icp==="podcast-il");
   else if(!window._showAll) rows=rows.filter(c=>c.icp==="fit"||c.icp==="fit-unverified");
   const counts={};for(const c of DATA.companies)if(c.triage)counts[c.triage]=(counts[c.triage]||0)+1;
