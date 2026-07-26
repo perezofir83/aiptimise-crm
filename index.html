@@ -638,6 +638,7 @@ function personPage(id){
   <h2 class="page">${p.name}${tagHtml(personStage(p))}${emailStatusTag(p)}${liTag(p)}</h2>
   <div class="sub">${p.title}${p.li_location?` · ${p.li_location}`:""}</div>
   ${p.li_note?`<p class="muted" style="margin-top:6px">🔎 Sales Nav: ${p.li_note}</p>`:""}
+  ${p.draft?`<div style="margin-top:10px"><button class="primary" onclick="showDraft('${p.id}')">📝 Open email draft</button></div>`:""}
   <div class="card"><h3>Profile</h3><div class="grid" style="margin-top:10px">
     <div class="kv">Email<b>${p.email?`<a href="mailto:${p.email}">${p.email}</a> ${emailStatusTag(p)}${p.email_source?`<div class="muted" style="font-weight:400">via ${p.email_source}${p.email_source_url?` · <a href="${p.email_source_url}" target="_blank" rel="noopener">source</a>`:""}</div>`:""}`:"—"}</b></div>
     <div class="kv">Role bucket<b>${p.role_bucket||"—"}</b></div>
