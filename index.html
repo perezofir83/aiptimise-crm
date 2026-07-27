@@ -226,9 +226,12 @@ function usHtml(c){
 function dashboard(){
   const q=(window._q||"").toLowerCase();
   let rows=DATA.companies.filter(c=>!q||c.name.toLowerCase().includes(q)||c.domain.includes(q)||c.niche.toLowerCase().includes(q)||(c.tags||[]).some(t=>String(t).toLowerCase().includes(q)));
-  if(window._podcastOnly) rows=rows.filter(c=>c.icp==="podcast-il");
-  else if(window._draftOnly) rows=rows.filter(c=>hasDraft(c));
-  else if(!window._showAll) rows=rows.filter(c=>c.icp==="fit"||c.icp==="fit-unverified");
+  if(window._podcastOnly){ rows=rows.filter(c=>c.icp==="podcast-il"); }
+  else {
+    if(window._newOnly) rows=rows.filter(c=>(c.tags||[]).some(t=>String(t).includes("new-100")));
+    if(window._draftOnly) rows=rows.filter(c=>hasDraft(c));
+    if(!window._showAll && !window._newOnly && !window._draftOnly) rows=rows.filter(c=>c.icp==="fit"||c.icp==="fit-unverified");
+  }
   const counts={};for(const c of DATA.companies)if(c.triage)counts[c.triage]=(counts[c.triage]||0)+1;
   const allCount=rows.length;
   if(window._triage) rows=rows.filter(c=>c.triage===window._triage);
@@ -242,6 +245,7 @@ function dashboard(){
   <div class="search" style="display:flex;gap:12px;align-items:center">
     <input type="text" style="flex:1" placeholder="Search company / niche..." value="${window._q||""}" oninput="window._q=this.value;dashboard()">
     <label class="muted" style="white-space:nowrap"><input type="checkbox" ${window._showAll?"checked":""} onchange="window._showAll=this.checked;dashboard()"> Show non-ICP (above cap etc.)</label>
+    <label class="muted" style="white-space:nowrap"><input type="checkbox" ${window._newOnly?"checked":""} onchange="window._newOnly=this.checked;dashboard()"> 🎯 לידים חדשים (${DATA.companies.filter(c=>(c.tags||[]).some(t=>String(t).includes("new-100"))).length})</label>
     <label class="muted" style="white-space:nowrap"><input type="checkbox" ${window._draftOnly?"checked":""} onchange="window._draftOnly=this.checked;dashboard()"> 📝 עם דראפט בלבד</label>
     <label class="muted" style="white-space:nowrap"><input type="checkbox" ${window._podcastOnly?"checked":""} onchange="window._podcastOnly=this.checked;dashboard()"> 🎙 פודקאסט ישראלי (${DATA.companies.filter(c=>c.icp==="podcast-il").length})</label>
     <button onclick="socialStats()" title="Social outreach performance by variant" style="white-space:nowrap">📊 Social stats</button>
